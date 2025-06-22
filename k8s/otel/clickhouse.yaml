@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: appsentry-otel
+data:
+  config.xml: |
+    <?xml version="1.0"?>
+    <clickhouse>
+        <logger>
+            <level>information</level>
+            <console>1</console>
+        </logger>
+        <http_port>8123</http_port>
+        <tcp_port>9000</tcp_port>
+        <listen_host>0.0.0.0</listen_host>
+        <path>/var/lib/clickhouse/</path>
+        <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+        <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+        <users_config>users.xml</users_config>
+        <default_profile>default</default_profile>
+        <default_database>default</default_database>
+        <timezone>UTC</timezone>
+        <mlock_executable>false</mlock_executable>
+    </clickhouse>
+  users.xml: |
+    <?xml version="1.0"?>
+    <clickhouse>
+        <profiles>
+            <default>
+                <max_memory_usage>10000000000</max_memory_usage>
+                <use_uncompressed_cache>0</use_uncompressed_cache>
+                <load_balancing>random</load_balancing>
+            </default>
+        </profiles>
+        <users>
+            <default>
+                <password></password>
+                <networks incl="networks" replace="replace">
+                    <ip>::/0</ip>
+                </networks>
+                <profile>default</profile>
+                <quota>default</quota>
+            </default>
+        </users>
+        <quotas>
+            <default>
+                <interval>
+                    <duration>3600</duration>
+                    <queries>0</queries>
+                    <errors>0</errors>
+                    <result_rows>0</result_rows>
+                    <read_rows>0</read_rows>
+                    <execution_time>0</execution_time>
+                </interval>
+            </default>
+        </quotas>
+    </clickhouse>
+  init.sql: |
+    -- Create database for OTEL data
+    CREATE DATABASE IF NOT EXISTS otel;
+    
+    -- Traces table
+    CREATE TABLE IF NOT EXISTS otel.traces (
+        timestamp DateTime64(9),
+        trace_id String,
+        span_id String,
+        parent_span_id String,
+        operation_name String,
+        service_name String,
+        service_version String,
+        duration_ns UInt64,
+        status_code UInt8,
+        status_message String,
+        span_kind String,
+        resource_attributes Map(String, String),
+        span_attributes Map(String, String),
+        events Nested(
+            timestamp DateTime64(9),
+            name String,
+            attributes Map(String, String)
+        ),
+        links Nested(
+            trace_id String,
+            span_id String,
+            attributes Map(String, String)
+        )
+    ) ENGINE = MergeTree()
+    PARTITION BY toYYYYMMDD(timestamp)
+    ORDER BY (service_name, operation_name, timestamp, trace_id)
+    TTL timestamp + INTERVAL 30 DAY DELETE;
+    
+    -- Metrics table
+    CREATE TABLE IF NOT EXISTS otel.metrics (
+        timestamp DateTime64(9),
+        metric_name String,
+        metric_type String,
+        service_name String,
+        service_version String,
+        value Float64,
+        resource_attributes Map(String, String),
+        metric_attributes Map(String, String),
+        exemplar_trace_id String,
+        exemplar_span_id String
+    ) ENGINE = MergeTree()
+    PARTITION BY toYYYYMMDD(timestamp)
+    ORDER BY (service_name, metric_name, timestamp)
+    TTL timestamp + INTERVAL 30 DAY DELETE;
+    
+    -- Logs table
+    CREATE TABLE IF NOT EXISTS otel.logs (
+        timestamp DateTime64(9),
+        trace_id String,
+        span_id String,
+        severity_text String,
+        severity_number UInt8,
+        body String,
+        service_name String,
+        service_version String,
+        resource_attributes Map(String, String),
+        log_attributes Map(String, String)
+    ) ENGINE = MergeTree()
+    PARTITION BY toYYYYMMDD(timestamp)
+    ORDER BY (service_name, timestamp, trace_id)
+    TTL timestamp + INTERVAL 30 DAY DELETE;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clickhouse-data
+  namespace: appsentry-otel
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse
+  namespace: appsentry-otel
+  labels:
+    app: clickhouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+      - name: clickhouse
+        image: clickhouse/clickhouse-server:23.8
+        ports:
+        - containerPort: 8123
+          name: http
+        - containerPort: 9000
+          name: tcp
+        env:
+        - name: CLICKHOUSE_DB
+          value: otel
+        volumeMounts:
+        - name: clickhouse-data
+          mountPath: /var/lib/clickhouse
+        - name: clickhouse-config
+          mountPath: /etc/clickhouse-server/config.xml
+          subPath: config.xml
+        - name: clickhouse-config
+          mountPath: /etc/clickhouse-server/users.xml
+          subPath: users.xml
+        - name: clickhouse-config
+          mountPath: /docker-entrypoint-initdb.d/init.sql
+          subPath: init.sql
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: clickhouse-data
+        persistentVolumeClaim:
+          claimName: clickhouse-data
+      - name: clickhouse-config
+        configMap:
+          name: clickhouse-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: appsentry-otel
+  labels:
+    app: clickhouse
+spec:
+  ports:
+  - port: 8123
+    name: http
+    targetPort: 8123
+  - port: 9000
+    name: tcp
+    targetPort: 9000
+  selector:
+    app: clickhouse
+  type: ClusterIP
+---
+# NodePort service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-external
+  namespace: appsentry-otel
+  labels:
+    app: clickhouse
+spec:
+  ports:
+  - port: 8123
+    name: http
+    targetPort: 8123
+    nodePort: 30123
+  - port: 9000
+    name: tcp
+    targetPort: 9000
+    nodePort: 30900
+  selector:
+    app: clickhouse
+  type: NodePort

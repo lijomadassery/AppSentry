@@ -1,0 +1,292 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: appsentry-otel
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      
+      # Kubernetes cluster receiver
+      k8s_cluster:
+        collection_interval: 10s
+        node_conditions_to_report: [Ready, DiskPressure, MemoryPressure, PIDPressure, NetworkUnavailable]
+        distribution: kubernetes
+        
+      # Kubernetes objects receiver
+      k8sobjects:
+        objects:
+          - name: pods
+            mode: pull
+            interval: 30s
+          - name: events
+            mode: watch
+            
+      # Host metrics receiver (for node-level metrics)
+      hostmetrics:
+        collection_interval: 10s
+        scrapers:
+          cpu:
+            metrics:
+              system.cpu.utilization:
+                enabled: true
+          memory:
+            metrics:
+              system.memory.utilization:
+                enabled: true
+          disk:
+          filesystem:
+          network:
+          process:
+            mute_process_name_error: true
+            
+      # Prometheus receiver for scraping metrics
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'appsentry-frontend'
+              static_configs:
+                - targets: ['appsentry-frontend:3000']
+              metrics_path: /metrics
+              scrape_interval: 15s
+            - job_name: 'appsentry-backend'
+              static_configs:
+                - targets: ['appsentry-backend:3001']
+              metrics_path: /metrics
+              scrape_interval: 15s
+
+    processors:
+      # Batch processor for better performance
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+        
+      # Memory limiter to prevent OOM
+      memory_limiter:
+        limit_mib: 512
+        spike_limit_mib: 128
+        check_interval: 5s
+        
+      # Resource processor to add/modify resource attributes
+      resource:
+        attributes:
+          - key: deployment.environment
+            value: "minikube"
+            action: insert
+          - key: service.namespace
+            from_attribute: k8s.namespace.name
+            action: insert
+          - key: service.instance.id
+            from_attribute: k8s.pod.name
+            action: insert
+            
+      # K8s attributes processor
+      k8sattributes:
+        auth_type: "serviceAccount"
+        passthrough: false
+        filter:
+          node_from_env_var: KUBE_NODE_NAME
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+        pod_association:
+          - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+          - sources:
+            - from: resource_attribute
+              name: k8s.pod.uid
+          - sources:
+            - from: connection
+
+    exporters:
+      # OTLP HTTP exporter to AppSentry backend for processing
+      otlphttp/traces:
+        endpoint: http://192.168.49.1:3001/api/otel
+        tls:
+          insecure: true
+        compression: gzip
+        headers:
+          x-api-key: "otel-collector"
+          
+      # Debug exporter for troubleshooting
+      debug:
+        verbosity: detailed
+        
+      # OTLP exporter to forward to AppSentry backend
+      otlp/appsentry:
+        endpoint: http://appsentry-backend:3001/v1/traces
+        tls:
+          insecure: true
+        headers:
+          x-api-key: "appsentry-otel-key"
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      pprof:
+        endpoint: 0.0.0.0:1777
+      zpages:
+        endpoint: 0.0.0.0:55679
+
+    service:
+      extensions: [health_check, pprof, zpages]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, resource, batch]
+          exporters: [otlphttp/traces, debug]
+        metrics:
+          receivers: [otlp, k8s_cluster, hostmetrics, prometheus]
+          processors: [memory_limiter, k8sattributes, resource, batch]
+          exporters: [otlphttp/traces, debug]
+        logs:
+          receivers: [otlp, k8sobjects]
+          processors: [memory_limiter, k8sattributes, resource, batch]
+          exporters: [otlphttp/traces, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: appsentry-otel
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.92.0
+        args:
+          - --config=/etc/otel-collector-config/config.yaml
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+          protocol: TCP
+        - containerPort: 4318
+          name: otlp-http
+          protocol: TCP
+        - containerPort: 13133
+          name: health-check
+          protocol: TCP
+        - containerPort: 1777
+          name: pprof
+          protocol: TCP
+        - containerPort: 55679
+          name: zpages
+          protocol: TCP
+        env:
+        - name: KUBE_NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel-collector-config
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+          items:
+          - key: config.yaml
+            path: config.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: appsentry-otel
+  labels:
+    app: otel-collector
+spec:
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+    protocol: TCP
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+    protocol: TCP
+  - name: health-check
+    port: 13133
+    targetPort: 13133
+    protocol: TCP
+  - name: zpages
+    port: 55679
+    targetPort: 55679
+    protocol: TCP
+  selector:
+    app: otel-collector
+  type: ClusterIP
+---
+# NodePort service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector-external
+  namespace: appsentry-otel
+  labels:
+    app: otel-collector
+spec:
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+    nodePort: 30317
+    protocol: TCP
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+    nodePort: 30318
+    protocol: TCP
+  selector:
+    app: otel-collector
+  type: NodePort

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=healthdb
+      - MYSQL_USERNAME=healthcheck
+      - MYSQL_PASSWORD=healthcheck_password
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGIN=http://localhost:3001
+      - JWT_SECRET=your-jwt-secret-change-in-production
+      - AZURE_AD_TENANT_ID=your-tenant-id
+      - AZURE_AD_CLIENT_ID=your-client-id
+      - AZURE_AD_CLIENT_SECRET=your-client-secret
+      - AZURE_AD_REDIRECT_URI=http://localhost:3000/api/auth/azure/callback
+      - AZURE_STORAGE_ACCOUNT=healthdashboard
+      - AZURE_STORAGE_KEY=your-storage-key
+      - HEALTH_CHECK_PASSWORD=secure-test-password
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=healthdb
+      - MYSQL_USER=healthcheck
+      - MYSQL_PASSWORD=healthcheck_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
