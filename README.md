@@ -24,22 +24,34 @@ A comprehensive observability platform for monitoring distributed applications w
 ## Project Structure
 
 ```
-src/
-├── routes/          # API routes including OTLP endpoints
-├── services/        # ClickHouse service and telemetry processing
-├── utils/           # Logging and utility functions
-├── otel.ts          # OpenTelemetry initialization and configuration
-└── app.ts           # Express application setup
+backend/
+├── src/
+│   ├── routes/          # API routes including OTLP endpoints
+│   ├── services/        # ClickHouse service and telemetry processing
+│   ├── utils/           # Logging and utility functions
+│   ├── otel.ts          # OpenTelemetry initialization and configuration
+│   └── app.ts           # Express application setup
+├── package.json         # Backend dependencies and scripts
+└── tsconfig.json        # TypeScript configuration for backend
 
 frontend/
 ├── src/
-│   ├── components/  # React components with glassmorphism design
-│   ├── services/    # API client for telemetry data
-│   └── pages/       # Dashboard pages (Overview, Traces, Metrics, Logs)
+│   ├── components/      # React components with glassmorphism design
+│   ├── services/        # API client for telemetry data
+│   ├── pages/           # Dashboard pages (Overview, Traces, Metrics, Logs)
+│   └── types/           # TypeScript type definitions
+├── package.json         # Frontend dependencies and scripts
+└── tsconfig.json        # TypeScript configuration for frontend
 
 k8s/
-├── clickhouse/      # ClickHouse Kubernetes manifests
-└── otel/           # OpenTelemetry Collector configuration
+├── clickhouse/          # ClickHouse Kubernetes manifests
+└── otel/               # OpenTelemetry Collector configuration
+
+# Root level files
+├── package.json         # Workspace configuration with unified scripts
+├── docker-compose.yml   # Multi-service Docker setup
+├── .env                 # Environment configuration
+└── README.md           # Project documentation
 ```
 
 ## Prerequisites
@@ -53,14 +65,13 @@ k8s/
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/AppSentry.git
+git clone https://github.com/lijomadassery/AppSentry.git
 cd AppSentry
 ```
 
-2. **Install dependencies:**
+2. **Install dependencies for both frontend and backend:**
 ```bash
 npm install
-cd frontend && npm install && cd ..
 ```
 
 3. **Set up ClickHouse on Kubernetes:**
@@ -80,15 +91,18 @@ kubectl port-forward svc/clickhouse 8123:8123 9000:9000 &
 kubectl apply -f k8s/otel/
 ```
 
-5. **Start the backend:**
+5. **Start both frontend and backend in development mode:**
 ```bash
 npm run dev
 ```
 
-6. **Start the frontend:**
+**Or start them separately:**
 ```bash
-cd frontend
-npm start
+# Backend only
+npm run dev:backend
+
+# Frontend only
+npm run dev:frontend
 ```
 
 The application will be available at:
@@ -140,11 +154,27 @@ The application automatically instruments:
 
 ## Available Scripts
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build TypeScript to JavaScript
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint (if configured)
-- `npm run typecheck` - Run TypeScript type checking
+### Root Level Scripts (Workspace Management)
+- `npm install` - Install dependencies for both frontend and backend
+- `npm run dev` - Start both frontend and backend in development mode
+- `npm run build` - Build both frontend and backend for production
+- `npm run start` - Start backend in production mode
+- `npm run test` - Run tests for both frontend and backend
+- `npm run lint` - Run linting for both frontend and backend
+
+### Backend-Specific Scripts
+- `npm run dev:backend` - Start backend development server with hot reload
+- `npm run build:backend` - Build backend TypeScript to JavaScript
+- `npm run start:backend` - Start backend production server
+- `npm run test:backend` - Run backend tests
+- `npm run lint:backend` - Run backend ESLint
+
+### Frontend-Specific Scripts
+- `npm run dev:frontend` - Start frontend development server
+- `npm run build:frontend` - Build frontend for production
+- `npm run start:frontend` - Start frontend production server
+- `npm run test:frontend` - Run frontend tests
+- `npm run lint:frontend` - Run frontend ESLint
 
 ## Data Storage
 
