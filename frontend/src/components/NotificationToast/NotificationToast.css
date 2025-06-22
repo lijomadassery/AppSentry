@@ -1,0 +1,132 @@
+.notification-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 400px;
+  width: 100%;
+}
+
+.notification-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid;
+  background: #ffffff;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.notification-toast.success {
+  border-color: #d1fae5;
+  background: #ecfdf5;
+}
+
+.notification-toast.success .notification-icon {
+  color: #059669;
+}
+
+.notification-toast.warning {
+  border-color: #fed7aa;
+  background: #fffbeb;
+}
+
+.notification-toast.warning .notification-icon {
+  color: #d97706;
+}
+
+.notification-toast.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.notification-toast.error .notification-icon {
+  color: #dc2626;
+}
+
+.notification-toast.info {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.notification-toast.info .notification-icon {
+  color: #0369a1;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.25rem 0;
+}
+
+.notification-message {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.notification-close:hover {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .notification-container {
+    top: 0.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    max-width: none;
+  }
+
+  .notification-toast {
+    padding: 0.75rem;
+  }
+
+  .notification-title {
+    font-size: 0.8rem;
+  }
+
+  .notification-message {
+    font-size: 0.75rem;
+  }
+}

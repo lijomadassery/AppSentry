@@ -1,0 +1,378 @@
+/* Overview Cards - Modern Glassmorphism Design */
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .overview-cards {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+}
+
+@media (min-width: 1400px) {
+  .overview-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Individual Overview Card */
+.overview-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    0 1px 6px rgba(0, 0, 0, 0.04);
+}
+
+.overview-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Dark mode card styles */
+[data-theme="dark"] .overview-card {
+  background: rgba(17, 24, 39, 0.95);
+  border-color: rgba(75, 85, 99, 0.3);
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    0 1px 6px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .overview-card:hover {
+  background: rgba(31, 41, 55, 0.95);
+  border-color: rgba(75, 85, 99, 0.5);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Card Background Effects */
+.card-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  z-index: 1;
+}
+
+.card-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, transparent 40%, rgba(255, 255, 255, 0.03) 70%);
+  animation: rotate 20s linear infinite;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.overview-card:hover .card-glow {
+  opacity: 1;
+}
+
+[data-theme="dark"] .card-glow {
+  background: radial-gradient(circle, transparent 40%, rgba(255, 255, 255, 0.05) 70%);
+}
+
+.card-pattern {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.02) 50%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(30px, -30px);
+}
+
+[data-theme="dark"] .card-pattern {
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.03) 50%, transparent 70%);
+}
+
+/* Card Content */
+.card-content {
+  position: relative;
+  z-index: 2;
+  padding: 1rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.overview-card:hover .card-icon {
+  transform: scale(1.1);
+}
+
+.card-trend {
+  display: flex;
+  align-items: center;
+}
+
+.trend-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.trend-indicator.positive {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.trend-indicator.negative {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+[data-theme="dark"] .trend-indicator.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+[data-theme="dark"] .trend-indicator.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Card Body */
+.card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+  margin-bottom: 0.125rem;
+  transition: color 0.2s ease;
+}
+
+[data-theme="dark"] .card-value {
+  color: #f9fafb;
+}
+
+.card-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+[data-theme="dark"] .card-title {
+  color: #d1d5db;
+}
+
+.card-subtitle {
+  font-size: 0.75rem;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+[data-theme="dark"] .card-subtitle {
+  color: #9ca3af;
+}
+
+/* Card Footer */
+.card-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.trend-period {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .trend-period {
+  color: #6b7280;
+}
+
+/* Color Variants */
+.card-blue .card-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(29, 78, 216, 0.05));
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.card-green .card-icon {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(21, 128, 61, 0.05));
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.card-orange .card-icon {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.1), rgba(194, 65, 12, 0.05));
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.card-red .card-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(185, 28, 28, 0.05));
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.card-purple .card-icon {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(126, 34, 206, 0.05));
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.card-indigo .card-icon {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(67, 56, 202, 0.05));
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* Dark mode icon adjustments */
+[data-theme="dark"] .card-blue .card-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(29, 78, 216, 0.08));
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .card-green .card-icon {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(21, 128, 61, 0.08));
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+[data-theme="dark"] .card-orange .card-icon {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(194, 65, 12, 0.08));
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+[data-theme="dark"] .card-red .card-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.08));
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="dark"] .card-purple .card-icon {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(126, 34, 206, 0.08));
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="dark"] .card-indigo .card-icon {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(67, 56, 202, 0.08));
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+/* Hover Effects */
+.card-hover-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: 1rem;
+}
+
+.overview-card:hover .card-hover-effect {
+  opacity: 1;
+}
+
+[data-theme="dark"] .card-hover-effect {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent);
+}
+
+/* Animations */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.overview-card {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.overview-card:nth-child(1) { animation-delay: 0ms; }
+.overview-card:nth-child(2) { animation-delay: 100ms; }
+.overview-card:nth-child(3) { animation-delay: 200ms; }
+.overview-card:nth-child(4) { animation-delay: 300ms; }
+.overview-card:nth-child(5) { animation-delay: 400ms; }
+.overview-card:nth-child(6) { animation-delay: 500ms; }
+
+/* Performance optimizations */
+.overview-card {
+  will-change: transform, box-shadow;
+}
+
+.overview-card:hover {
+  will-change: auto;
+}

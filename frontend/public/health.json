@@ -1,0 +1,7 @@
+{
+  "status": "healthy",
+  "timestamp": "static",
+  "service": "appsentry-frontend",
+  "version": "0.1.0",
+  "type": "static"
+}
