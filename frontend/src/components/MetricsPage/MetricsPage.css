@@ -24,6 +24,7 @@
   align-items: center;
 }
 
+.application-select,
 .service-select,
 .time-range-select,
 .refresh-interval-select {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, u
 import { Application, DashboardStats, TestRun, User } from '../types';
 import { applicationApi } from '../services/api';
 import { platformMetricsApi, ClusterMetrics, KubernetesHealth } from '../services/platformMetricsApi';
+import { healthCheckApi, HealthMetrics } from '../services/healthCheckApi';
 
 // State Types
 interface AppState {
@@ -20,6 +21,11 @@ interface AppState {
   clusterMetricsLoading: boolean;
   clusterMetricsError: string | null;
   kubernetesHealth: KubernetesHealth | null;
+  
+  // Health Check Metrics
+  healthMetrics: HealthMetrics | null;
+  healthMetricsLoading: boolean;
+  healthMetricsError: string | null;
   
   // Test Runs
   currentTestRun: TestRun | null;
@@ -65,6 +71,11 @@ type AppAction =
   | { type: 'CLUSTER_METRICS_SUCCESS'; payload: ClusterMetrics }
   | { type: 'CLUSTER_METRICS_ERROR'; payload: string }
   | { type: 'KUBERNETES_HEALTH_UPDATE'; payload: KubernetesHealth }
+  
+  // Health Check Metrics
+  | { type: 'HEALTH_METRICS_LOADING'; payload?: boolean }
+  | { type: 'HEALTH_METRICS_SUCCESS'; payload: HealthMetrics }
+  | { type: 'HEALTH_METRICS_ERROR'; payload: string }
   
   // Test Runs
   | { type: 'TEST_RUN_START'; payload: TestRun }
@@ -113,6 +124,10 @@ const initialState: AppState = {
   clusterMetricsLoading: false,
   clusterMetricsError: null,
   kubernetesHealth: null,
+  
+  healthMetrics: null,
+  healthMetricsLoading: false,
+  healthMetricsError: null,
   
   currentTestRun: null,
   testRunHistory: [],
@@ -227,6 +242,29 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         kubernetesHealth: action.payload,
+      };
+      
+    // Health Check Metrics
+    case 'HEALTH_METRICS_LOADING':
+      return {
+        ...state,
+        healthMetricsLoading: action.payload ?? true,
+        healthMetricsError: null,
+      };
+      
+    case 'HEALTH_METRICS_SUCCESS':
+      return {
+        ...state,
+        healthMetrics: action.payload,
+        healthMetricsLoading: false,
+        healthMetricsError: null,
+      };
+      
+    case 'HEALTH_METRICS_ERROR':
+      return {
+        ...state,
+        healthMetricsLoading: false,
+        healthMetricsError: action.payload,
       };
       
     // Test Runs
@@ -349,6 +387,7 @@ interface AppContextType {
   loadStats: () => Promise<void>;
   loadClusterMetrics: () => Promise<void>;
   loadKubernetesHealth: () => Promise<void>;
+  loadHealthMetrics: () => Promise<void>;
   addApplication: (app: Partial<Application>) => Promise<void>;
   updateApplication: (id: string, updates: Partial<Application>) => Promise<void>;
   deleteApplication: (id: string) => Promise<void>;
@@ -487,6 +526,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, []);
 
+  const loadHealthMetrics = useCallback(async () => {
+    dispatch({ type: 'HEALTH_METRICS_LOADING' });
+    try {
+      const metrics = await healthCheckApi.getHealthMetrics();
+      dispatch({ type: 'HEALTH_METRICS_SUCCESS', payload: metrics });
+    } catch (error) {
+      console.error('Failed to load health metrics:', error);
+      dispatch({ type: 'HEALTH_METRICS_ERROR', payload: 'Failed to load health check metrics' });
+    }
+  }, []);
+
   const clearMessage = useCallback(() => {
     dispatch({ type: 'CLEAR_MESSAGE' });
   }, []);
@@ -497,7 +547,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     loadStats();
     loadClusterMetrics();
     loadKubernetesHealth();
-  }, [loadApplications, loadStats, loadClusterMetrics, loadKubernetesHealth]);
+    loadHealthMetrics();
+  }, [loadApplications, loadStats, loadClusterMetrics, loadKubernetesHealth, loadHealthMetrics]);
 
   const contextValue = useMemo(() => ({
     state,
@@ -506,6 +557,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     loadStats,
     loadClusterMetrics,
     loadKubernetesHealth,
+    loadHealthMetrics,
     addApplication,
     updateApplication,
     deleteApplication,
@@ -518,6 +570,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     loadStats,
     loadClusterMetrics,
     loadKubernetesHealth,
+    loadHealthMetrics,
     addApplication,
     updateApplication,
     deleteApplication,

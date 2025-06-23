@@ -36,6 +36,7 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+
 const startServer = async () => {
   try {
     // Check ClickHouse connection

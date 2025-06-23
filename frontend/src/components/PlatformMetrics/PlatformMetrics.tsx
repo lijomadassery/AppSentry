@@ -1,5 +1,5 @@
 import React from 'react';
-import { Server, HardDrive, Cpu, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Server, HardDrive, Cpu, AlertTriangle, CheckCircle, XCircle, Clock, Activity, Shield } from 'lucide-react';
 import { ClusterMetrics, KubernetesHealth } from '../../services/platformMetricsApi';
 import './PlatformMetrics.css';
 
@@ -9,6 +9,7 @@ interface PlatformMetricsProps {
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  onNavigateToDetail?: (page: string) => void;
 }
 
 export const PlatformMetrics: React.FC<PlatformMetricsProps> = ({
@@ -16,7 +17,8 @@ export const PlatformMetrics: React.FC<PlatformMetricsProps> = ({
   kubernetesHealth,
   loading,
   error,
-  onRefresh
+  onRefresh,
+  onNavigateToDetail
 }) => {
   if (loading && !clusterMetrics) {
     return (
@@ -75,152 +77,241 @@ export const PlatformMetrics: React.FC<PlatformMetricsProps> = ({
         </div>
       ) : (
         <div className="metrics-content">
-          {/* Cluster Overview Cards */}
-          <div className="cluster-overview">
-            <div className="overview-card nodes">
-              <div className="card-header">
-                <Server size={18} />
-                <h4>Nodes</h4>
+          {/* Kubernetes Monitoring Cards - Navigate to Detail Pages */}
+          <div className="k8s-monitoring-cards">
+            <div 
+              className="overview-card card-blue" 
+              onClick={() => onNavigateToDetail?.('k8s-node-metrics')}
+            >
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
               </div>
-              <div className="card-stats">
-                <div className="primary-stat">
-                  <span className="stat-value">{clusterMetrics.nodes.ready}</span>
-                  <span className="stat-total">/ {clusterMetrics.nodes.total}</span>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <Server size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.nodes.ready === clusterMetrics.nodes.total ? 'positive' : 'negative'}`}>
+                      <CheckCircle size={12} />
+                      <span>{Math.round((clusterMetrics.nodes.ready / clusterMetrics.nodes.total) * 100)}%</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="stat-label">Ready Nodes</div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.nodes.ready}/{clusterMetrics.nodes.total}</div>
+                  <div className="card-title">Kubernetes Node Metrics</div>
+                  <div className="card-subtitle">
+                    Avg CPU: {clusterMetrics.nodes.metrics.length > 0 
+                      ? Math.round(clusterMetrics.nodes.metrics.reduce((sum, node) => sum + node.cpu.percentage, 0) / clusterMetrics.nodes.metrics.length)
+                      : 0}% • <span className="view-details-link">View detailed metrics →</span>
+                  </div>
+                </div>
               </div>
-              <div className="status-bar">
-                <div 
-                  className="status-fill ready" 
-                  style={{ width: `${(clusterMetrics.nodes.ready / clusterMetrics.nodes.total) * 100}%` }}
-                />
-              </div>
+              <div className="card-hover-effect"></div>
             </div>
 
-            <div className="overview-card pods">
-              <div className="card-header">
-                <HardDrive size={18} />
-                <h4>Pods</h4>
+            <div 
+              className="overview-card card-green" 
+              onClick={() => onNavigateToDetail?.('k8s-pod-metrics')}
+            >
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
               </div>
-              <div className="card-stats">
-                <div className="primary-stat">
-                  <span className="stat-value">{clusterMetrics.pods.running}</span>
-                  <span className="stat-total">/ {clusterMetrics.pods.total}</span>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <Activity size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.pods.failed === 0 ? 'positive' : 'negative'}`}>
+                      {clusterMetrics.pods.failed === 0 ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                      <span>{Math.round((clusterMetrics.pods.running / clusterMetrics.pods.total) * 100)}%</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="stat-label">Running Pods</div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.pods.running}/{clusterMetrics.pods.total}</div>
+                  <div className="card-title">Kubernetes Pod Metrics</div>
+                  <div className="card-subtitle">
+                    Failed: {clusterMetrics.pods.failed} • <span className="view-details-link">View detailed metrics →</span>
+                  </div>
+                </div>
               </div>
-              <div className="pod-status-breakdown">
-                <div className="status-item running">
-                  <span>{clusterMetrics.pods.running}</span>
-                  <label>Running</label>
-                </div>
-                <div className="status-item pending">
-                  <span>{clusterMetrics.pods.pending}</span>
-                  <label>Pending</label>
-                </div>
-                <div className="status-item failed">
-                  <span>{clusterMetrics.pods.failed}</span>
-                  <label>Failed</label>
-                </div>
-              </div>
+              <div className="card-hover-effect"></div>
             </div>
 
-            <div className="overview-card deployments">
-              <div className="card-header">
-                <Cpu size={18} />
-                <h4>Deployments</h4>
+            <div 
+              className="overview-card card-purple" 
+              onClick={() => onNavigateToDetail?.('k8s-workload-health')}
+            >
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
               </div>
-              <div className="card-stats">
-                <div className="primary-stat">
-                  <span className="stat-value">{clusterMetrics.deployments.available}</span>
-                  <span className="stat-total">/ {clusterMetrics.deployments.total}</span>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <Shield size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.deployments.available === clusterMetrics.deployments.total && clusterMetrics.pods.pending === 0 ? 'positive' : 'negative'}`}>
+                      {clusterMetrics.deployments.available === clusterMetrics.deployments.total && clusterMetrics.pods.pending === 0 ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                      <span>{Math.round((clusterMetrics.deployments.available / clusterMetrics.deployments.total) * 100)}%</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="stat-label">Available</div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.deployments.available}/{clusterMetrics.deployments.total}</div>
+                  <div className="card-title">Kubernetes Workload Health</div>
+                  <div className="card-subtitle">
+                    Pending: {clusterMetrics.pods.pending} • <span className="view-details-link">View health details →</span>
+                  </div>
+                </div>
               </div>
-              <div className="status-bar">
-                <div 
-                  className="status-fill available" 
-                  style={{ width: `${(clusterMetrics.deployments.available / clusterMetrics.deployments.total) * 100}%` }}
-                />
-              </div>
+              <div className="card-hover-effect"></div>
             </div>
           </div>
 
-          {/* Node Resource Usage */}
-          {clusterMetrics.nodes.metrics.length > 0 && (
-            <div className="node-details">
-              <h4>Node Resource Usage</h4>
-              <div className="node-overview">
-                {clusterMetrics.nodes.metrics.map((node) => (
-                  <div key={node.name} className="overview-card node-resource-card">
-                    <div className="card-header">
-                      <Server size={18} />
-                      <h4>{node.name}</h4>
-                      <div className={`node-status ${node.ready ? 'ready' : 'not-ready'}`}>
-                        {node.ready ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                        {node.ready ? 'Ready' : 'Not Ready'}
-                      </div>
-                    </div>
-                    
-                    <div className="node-resources">
-                      <div className="resource-metric">
-                        <div className="resource-info">
-                          <Cpu size={12} />
-                          <span>CPU</span>
-                          <span className="percentage">{node.cpu.percentage}%</span>
-                        </div>
-                        <div className="resource-bar">
-                          <div 
-                            className="resource-fill cpu" 
-                            style={{ width: `${Math.min(node.cpu.percentage, 100)}%` }}
-                          />
-                        </div>
-                        <div className="resource-usage">
-                          {node.cpu.usage} / {node.cpu.capacity}
-                        </div>
-                      </div>
-                      
-                      <div className="resource-metric">
-                        <div className="resource-info">
-                          <HardDrive size={12} />
-                          <span>Memory</span>
-                          <span className="percentage">{node.memory.percentage}%</span>
-                        </div>
-                        <div className="resource-bar">
-                          <div 
-                            className="resource-fill memory" 
-                            style={{ width: `${Math.min(node.memory.percentage, 100)}%` }}
-                          />
-                        </div>
-                        <div className="resource-usage">
-                          {node.memory.usage} / {node.memory.capacity}
-                        </div>
-                      </div>
+          {/* Cluster Overview Cards */}
+          <div className="cluster-overview">
+            <div className="overview-card card-orange">
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
+              </div>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <Server size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.nodes.ready === clusterMetrics.nodes.total ? 'positive' : 'negative'}`}>
+                      {clusterMetrics.nodes.ready === clusterMetrics.nodes.total ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                      <span>{Math.round((clusterMetrics.nodes.ready / clusterMetrics.nodes.total) * 100)}%</span>
                     </div>
                   </div>
-                ))}
+                </div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.nodes.ready}/{clusterMetrics.nodes.total}</div>
+                  <div className="card-title">Ready Nodes</div>
+                  <div className="card-subtitle">
+                    {clusterMetrics.nodes.total - clusterMetrics.nodes.ready > 0 ? 
+                      `${clusterMetrics.nodes.total - clusterMetrics.nodes.ready} not ready` : 
+                      'All nodes healthy'
+                    }
+                  </div>
+                </div>
               </div>
+              <div className="card-hover-effect"></div>
             </div>
-          )}
 
-          {/* Recent Events */}
+            <div className="overview-card card-indigo">
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
+              </div>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <HardDrive size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.pods.failed === 0 && clusterMetrics.pods.pending === 0 ? 'positive' : 'negative'}`}>
+                      {clusterMetrics.pods.failed === 0 && clusterMetrics.pods.pending === 0 ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                      <span>{Math.round((clusterMetrics.pods.running / clusterMetrics.pods.total) * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.pods.running}/{clusterMetrics.pods.total}</div>
+                  <div className="card-title">Running Pods</div>
+                  <div className="card-subtitle">
+                    {clusterMetrics.pods.pending > 0 && `${clusterMetrics.pods.pending} pending`}
+                    {clusterMetrics.pods.failed > 0 && `${clusterMetrics.pods.failed} failed`}
+                    {clusterMetrics.pods.pending === 0 && clusterMetrics.pods.failed === 0 && 'All pods healthy'}
+                  </div>
+                </div>
+              </div>
+              <div className="card-hover-effect"></div>
+            </div>
+
+            <div className="overview-card card-red">
+              <div className="card-background">
+                <div className="card-glow"></div>
+                <div className="card-pattern"></div>
+              </div>
+              <div className="card-content">
+                <div className="card-header">
+                  <div className="card-icon">
+                    <Cpu size={18} />
+                  </div>
+                  <div className="card-trend">
+                    <div className={`trend-indicator ${clusterMetrics.deployments.available === clusterMetrics.deployments.total ? 'positive' : 'negative'}`}>
+                      {clusterMetrics.deployments.available === clusterMetrics.deployments.total ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                      <span>{Math.round((clusterMetrics.deployments.available / clusterMetrics.deployments.total) * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="card-value">{clusterMetrics.deployments.available}/{clusterMetrics.deployments.total}</div>
+                  <div className="card-title">Available Deployments</div>
+                  <div className="card-subtitle">
+                    {clusterMetrics.deployments.total - clusterMetrics.deployments.available > 0 ? 
+                      `${clusterMetrics.deployments.total - clusterMetrics.deployments.available} unavailable` : 
+                      'All deployments ready'
+                    }
+                  </div>
+                </div>
+              </div>
+              <div className="card-hover-effect"></div>
+            </div>
+          </div>
+
+
+          {/* Recent Cluster Warnings */}
           {clusterMetrics.events.warnings.length > 0 && (
-            <div className="cluster-events">
+            <div className="cluster-warnings-section">
               <h4>Recent Cluster Warnings</h4>
-              <div className="events-list">
-                {clusterMetrics.events.warnings.slice(0, 5).map((event, index) => (
-                  <div key={index} className="event-item warning">
-                    <AlertTriangle size={16} />
-                    <div className="event-content">
-                      <div className="event-header">
-                        <span className="event-reason">{event.reason}</span>
-                        <span className="event-object">{event.object?.kind}/{event.object?.name}</span>
+              <div className="warnings-grid">
+                {clusterMetrics.events.warnings.slice(0, 6).map((event, index) => (
+                  <div key={index} className="overview-card card-red">
+                    <div className="card-background">
+                      <div className="card-glow"></div>
+                      <div className="card-pattern"></div>
+                    </div>
+                    <div className="card-content">
+                      <div className="card-header">
+                        <div className="card-icon">
+                          <AlertTriangle size={18} />
+                        </div>
+                        <div className="card-trend">
+                          <div className="trend-indicator negative">
+                            <XCircle size={12} />
+                            <span>Warning</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="event-message">{event.message}</div>
-                      <div className="event-timestamp">
-                        {event.lastTimestamp && new Date(event.lastTimestamp).toLocaleString()}
+                      <div className="card-body">
+                        <div className="card-value">{event.reason}</div>
+                        <div className="card-title">{event.object?.kind}/{event.object?.name}</div>
+                        <div className="card-subtitle">
+                          {event.message?.length > 60 ? 
+                            `${event.message.substring(0, 60)}...` : 
+                            event.message}
+                        </div>
+                      </div>
+                      <div className="card-footer">
+                        <div className="event-time">
+                          {event.lastTimestamp && 
+                            new Date(event.lastTimestamp).toLocaleString()
+                          }
+                        </div>
                       </div>
                     </div>
+                    <div className="card-hover-effect"></div>
                   </div>
                 ))}
               </div>

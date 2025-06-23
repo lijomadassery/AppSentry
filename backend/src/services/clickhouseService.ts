@@ -97,7 +97,12 @@ class ClickHouseService {
         format: 'JSONEachRow',
       });
 
-      logger.debug(`Inserted ${traces.length} traces into ClickHouse`);
+      logger.info('Inserted traces into ClickHouse', {
+        operation: 'clickhouse_insert',
+        table: 'otel.traces',
+        record_count: traces.length,
+        data_type: 'traces'
+      });
     } catch (error) {
       logger.error('Failed to insert traces into ClickHouse', { error });
       throw error;
@@ -116,7 +121,12 @@ class ClickHouseService {
         format: 'JSONEachRow',
       });
 
-      logger.debug(`Inserted ${metrics.length} metrics into ClickHouse`);
+      logger.info('Inserted metrics into ClickHouse', {
+        operation: 'clickhouse_insert',
+        table: 'otel.metrics_sum',
+        record_count: metrics.length,
+        data_type: 'metrics'
+      });
     } catch (error) {
       logger.error('Failed to insert metrics into ClickHouse', { error });
       throw error;
@@ -133,7 +143,10 @@ class ClickHouseService {
         format: 'JSONEachRow',
       });
 
-      logger.debug(`Inserted ${logs.length} logs into ClickHouse`);
+      // Use console.log to avoid infinite logging loops
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Inserted', logs.length, 'logs into ClickHouse');
+      }
     } catch (error) {
       logger.error('Failed to insert logs into ClickHouse', { error });
       throw error;

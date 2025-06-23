@@ -55,7 +55,8 @@
   border-color: var(--primary-color);
 }
 
-.time-range-select {
+.time-range-select,
+.application-filter {
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -491,6 +492,132 @@
   .logs-content {
     gap: 0;
   }
+}
+
+/* View Toggle Styles */
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-secondary);
+}
+
+.view-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-right: 1px solid var(--border-color);
+}
+
+.view-btn:last-child {
+  border-right: none;
+}
+
+.view-btn:hover {
+  background: var(--surface-tertiary);
+  color: var(--text-primary);
+}
+
+.view-btn.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+/* Service Group Styles */
+.service-group {
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  overflow: hidden;
+}
+
+.service-header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid transparent;
+}
+
+.service-header:hover {
+  background: var(--surface-tertiary);
+}
+
+.service-expand-icon {
+  margin-right: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.service-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 16px;
+  margin-right: 16px;
+  min-width: 150px;
+}
+
+.service-stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: 1;
+}
+
+.log-count, .pod-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-tertiary);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.error-badge {
+  font-size: 12px;
+  background: #ef4444;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.warn-badge {
+  font-size: 12px;
+  background: #f59e0b;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.service-last-activity {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.service-logs {
+  border-top: 1px solid var(--border-color);
+  background: var(--surface-primary);
+}
+
+.service-logs .log-entry {
+  border-bottom: 1px solid var(--border-color);
+  margin: 0;
+  border-radius: 0;
+}
+
+.service-logs .log-entry:last-child {
+  border-bottom: none;
 }
 
 @media (max-width: 768px) {

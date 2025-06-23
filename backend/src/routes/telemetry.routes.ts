@@ -3,300 +3,471 @@ import { logger } from '../utils/logger';
 import { metrics, trace } from '@opentelemetry/api';
 
 const router = Router();
-const meter = metrics.getMeter('appsentry-test', '1.0.0');
-const tracer = trace.getTracer('appsentry-test', '1.0.0');
+const meter = metrics.getMeter('appsentry-telemetry', '1.0.0');
+const tracer = trace.getTracer('appsentry-telemetry', '1.0.0');
 
-// Test metrics
-const testCounter = meter.createCounter('test_operations_total', {
-  description: 'Total number of test operations',
+// Real application metrics
+const apiRequestCounter = meter.createCounter('api_requests_total', {
+  description: 'Total number of API requests',
 });
 
-const testGauge = meter.createUpDownCounter('test_active_connections', {
-  description: 'Number of active test connections',
+const healthCheckCounter = meter.createCounter('health_checks_total', {
+  description: 'Total number of health checks performed',
 });
 
-const testHistogram = meter.createHistogram('test_operation_duration_ms', {
-  description: 'Duration of test operations in milliseconds',
+const databaseOperationHistogram = meter.createHistogram('database_operation_duration_ms', {
+  description: 'Duration of database operations in milliseconds',
 });
 
-// Generate sample telemetry data
-router.post('/generate-sample-data', async (req: Request, res: Response) => {
+// Get telemetry configuration
+router.get('/config', (req: Request, res: Response) => {
   try {
-    logger.info('Starting telemetry data generation');
-    
-    // Create a span for this operation
-    const span = tracer.startSpan('generate_sample_telemetry');
-    
-    
-    logger.info('Created span', {
-      traceId: span.spanContext().traceId,
-      spanId: span.spanContext().spanId,
-      traceFlags: span.spanContext().traceFlags
+    res.json({
+      success: true,
+      data: {
+        otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318',
+        serviceName: 'AppSentry Backend',
+        serviceVersion: '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        instrumentations: [
+          'http',
+          'express',
+          'clickhouse',
+          'kubernetes'
+        ]
+      }
     });
+  } catch (error) {
+    logger.error('Failed to get telemetry config:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get telemetry configuration'
+    });
+  }
+});
+
+// Manual metric recording (for testing real metrics)
+router.post('/record-metric', async (req: Request, res: Response) => {
+  try {
+    const { type, name, value, labels } = req.body;
+    
+    if (!type || !name || value === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: type, name, value'
+      });
+    }
+
+    const span = tracer.startSpan('manual_metric_recording');
     
     try {
-      // Simulate various operations with different durations and outcomes
-      for (let i = 0; i < 10; i++) {
-        const operationSpan = tracer.startSpan(`sample_operation_${i}`, { parent: span });
-        const startTime = Date.now();
-        
-        try {
-          // Simulate some work
-          await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
-          
-          const duration = Date.now() - startTime;
-          const success = Math.random() > 0.2; // 80% success rate
-          
-          // Record metrics
-          testCounter.add(1, {
-            operation: `operation_${i % 3}`,
-            status: success ? 'success' : 'error',
-            service: 'appsentry-backend'
-          });
-          
-          testHistogram.record(duration, {
-            operation: `operation_${i % 3}`,
-            status: success ? 'success' : 'error'
-          });
-          
-          // Log the operation and send to OTEL logs endpoint
-          const logData = {
-            timestamp: new Date().toISOString().replace('T', ' ').replace('Z', ''),
-            trace_id: operationSpan.spanContext().traceId,
-            span_id: operationSpan.spanContext().spanId,
-            severity_text: success ? 'INFO' : 'ERROR',
-            severity_number: success ? 9 : 17,
-            body: success ? `Sample operation ${i} completed successfully` : `Sample operation ${i} failed`,
-            service_name: 'appsentry-backend',
-            service_version: '1.0.0',
-            resource_attributes: {
-              'service.name': 'appsentry-backend',
-              'service.version': '1.0.0'
-            },
-            log_attributes: {
-              'operation.id': i.toString(),
-              'operation.duration_ms': duration.toString(),
-              'operation.success': success.toString()
-            }
-          };
-
-          // Send log to OTEL logs endpoint
-          try {
-            await fetch('http://localhost:3001/api/otel/v1/logs', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                resourceLogs: [{
-                  resource: {
-                    attributes: [
-                      { key: 'service.name', value: { stringValue: 'appsentry-backend' } },
-                      { key: 'service.version', value: { stringValue: '1.0.0' } }
-                    ]
-                  },
-                  scopeLogs: [{
-                    logRecords: [{
-                      timeUnixNano: (Date.now() * 1000000).toString(),
-                      severityText: logData.severity_text,
-                      severityNumber: logData.severity_number,
-                      body: { stringValue: logData.body },
-                      traceId: logData.trace_id,
-                      spanId: logData.span_id,
-                      attributes: Object.entries(logData.log_attributes).map(([key, value]) => ({
-                        key,
-                        value: { stringValue: value }
-                      }))
-                    }]
-                  }]
-                }]
-              })
-            });
-          } catch (logError) {
-            // Ignore log export errors
-          }
-
-          if (success) {
-            logger.info(`Sample operation ${i} completed successfully`, {
-              operationId: i,
-              duration: `${duration}ms`,
-              traceId: operationSpan.spanContext().traceId,
-              spanId: operationSpan.spanContext().spanId
-            });
-          } else {
-            logger.error(`Sample operation ${i} failed`, {
-              operationId: i,
-              duration: `${duration}ms`,
-              error: 'Simulated error for testing',
-              traceId: operationSpan.spanContext().traceId,
-              spanId: operationSpan.spanContext().spanId
-            });
-          }
-          
-          operationSpan.setStatus({ code: success ? 1 : 2 }); // OK or ERROR
-          operationSpan.setAttributes({
-            'operation.id': i,
-            'operation.type': `type_${i % 3}`,
-            'operation.duration_ms': duration,
-            'operation.success': success
-          });
-          
-        } catch (error) {
-          operationSpan.recordException(error as Error);
-          operationSpan.setStatus({ code: 2, message: (error as Error).message });
-          throw error;
-        } finally {
-          operationSpan.end();
-        }
+      switch (type) {
+        case 'counter':
+          apiRequestCounter.add(value, labels || {});
+          break;
+        case 'histogram':
+          databaseOperationHistogram.record(value, labels || {});
+          break;
+        default:
+          throw new Error(`Unsupported metric type: ${type}`);
       }
-      
-      // Update gauge metric
-      testGauge.add(Math.floor(Math.random() * 10) + 1, {
-        service: 'appsentry-backend'
-      });
-      
+
       span.setAttributes({
-        'generation.operations_count': 10,
-        'generation.success': true
+        'metric.type': type,
+        'metric.name': name,
+        'metric.value': value,
+        'metric.labels': JSON.stringify(labels || {})
       });
-      
-      logger.info('Sample telemetry data generated successfully', {
-        operationsGenerated: 10,
+
+      logger.info('Metric recorded manually', {
+        type,
+        name,
+        value,
+        labels,
         traceId: span.spanContext().traceId
       });
-      
-      logger.info('Ending main span', {
-        traceId: span.spanContext().traceId
-      });
-      
+
       res.json({
         success: true,
-        message: 'Sample telemetry data generated',
-        operationsGenerated: 10,
-        traceId: span.spanContext().traceId
+        message: 'Metric recorded successfully',
+        metric: { type, name, value, labels }
       });
-      
+
     } catch (error) {
       span.recordException(error as Error);
       span.setStatus({ code: 2, message: (error as Error).message });
       throw error;
     } finally {
       span.end();
-      
-      // Force flush for immediate export in development
-      setTimeout(async () => {
-        try {
-          const provider = trace.getTracerProvider() as any;
-          if (provider && provider.activeSpanProcessor && provider.activeSpanProcessor.forceFlush) {
-            await provider.activeSpanProcessor.forceFlush();
-            logger.info('Forced span processor flush');
-          }
-        } catch (error) {
-          logger.debug('Could not force flush span processor', { error });
-        }
-      }, 100);
     }
-    
+
   } catch (error) {
-    logger.error('Failed to generate sample telemetry data', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error('Failed to record metric:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record metric'
+    });
+  }
+});
+
+// Manual trace generation for testing real AppSentry operations
+router.post('/generate-trace', async (req: Request, res: Response) => {
+  const span = tracer.startSpan('appsentry_operation');
+  
+  try {
+    // Simulate real AppSentry operations
+    const operationType = req.body.operation || 'dashboard_load';
+    const userId = req.body.userId || 'admin';
+    
+    logger.info('Starting trace generation operation', {
+      operation: operationType,
+      userId: userId,
+      requestId: req.headers['x-request-id'] || 'unknown'
+    });
+    
+    span.setAttributes({
+      'operation.type': operationType,
+      'operation.user': userId,
+      'http.method': 'POST',
+      'http.route': '/api/telemetry/generate-trace',
+      'service.name': 'AppSentry Backend',
+      'component': 'telemetry'
+    });
+
+    // Simulate authentication check
+    logger.debug('Verifying user permissions', { userId });
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 30 + 10));
+
+    // Simulate some work
+    logger.info('Processing operation', { operation: operationType });
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
+    
+    // Simulate a child span
+    const childSpan = tracer.startSpan('database_query', { parent: span });
+    childSpan.setAttributes({
+      'db.system': 'clickhouse',
+      'db.statement': 'SELECT * FROM traces LIMIT 100',
+      'db.operation': 'SELECT'
+    });
+    
+    logger.debug('Executing database query', {
+      query: 'SELECT * FROM traces LIMIT 100',
+      database: 'clickhouse'
+    });
+    
+    // Simulate database operation
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 50 + 25));
+    logger.debug('Database query completed successfully');
+    childSpan.end();
+
+    // Record metrics
+    apiRequestCounter.add(1, {
+      operation: operationType,
+      status: 'success'
+    });
+
+    logger.info('Trace generation completed successfully', {
+      operation: operationType,
+      traceId: span.spanContext().traceId,
+      spanId: span.spanContext().spanId,
+      duration: Date.now() - (span as any).startTime
+    });
+
+    res.json({
+      success: true,
+      message: 'Trace generated successfully',
+      traceId: span.spanContext().traceId,
+      operation: operationType
+    });
+
+    span.setStatus({ code: 1 }); // OK
+    span.end();
+  } catch (error) {
+    logger.error('Failed to generate trace', {
+      error: error instanceof Error ? error.message : error,
+      operation: req.body.operation,
       stack: error instanceof Error ? error.stack : undefined
     });
     
+    span.recordException(error as Error);
+    span.setStatus({ code: 2, message: (error as Error).message });
+    span.end();
+    
     res.status(500).json({
       success: false,
-      error: 'Failed to generate sample telemetry data'
+      error: 'Failed to generate trace'
     });
   }
 });
 
-// Generate continuous sample data
-router.post('/start-continuous-generation', async (req: Request, res: Response) => {
+// Generate logs linked to actual traces
+router.post('/generate-trace-logs', async (req: Request, res: Response) => {
+  const span = tracer.startSpan('generate_trace_logs');
+  
   try {
-    // Start a background process to generate telemetry data every 10 seconds
-    const interval = setInterval(async () => {
-      try {
-        const span = tracer.startSpan('background_telemetry_generation');
-        
-        // Generate random metrics
-        testCounter.add(1, {
-          operation: 'background_task',
-          status: Math.random() > 0.1 ? 'success' : 'error',
-          service: 'appsentry-background'
-        });
-        
-        testHistogram.record(Math.random() * 200 + 50, {
-          operation: 'background_task'
-        });
-        
-        testGauge.add(Math.floor(Math.random() * 5) - 2, {
-          service: 'appsentry-background'
-        });
-        
-        // Generate random log
-        if (Math.random() > 0.7) {
-          logger.warn('Background process warning', {
-            processId: 'bg-001',
-            memoryUsage: Math.floor(Math.random() * 100) + 50,
-            traceId: span.spanContext().traceId
-          });
-        } else {
-          logger.info('Background process heartbeat', {
-            processId: 'bg-001',
-            status: 'healthy',
-            traceId: span.spanContext().traceId
-          });
+    const { clickHouseService } = require('../services/clickhouseService');
+    
+    // Get recent traces to link logs to
+    const recentTraces = await clickHouseService.getTraces({
+      timeRange: '5m',
+      limit: 5
+    });
+
+    const logEntries = [];
+    const currentTraceId = span.spanContext().traceId;
+    const currentSpanId = span.spanContext().spanId;
+
+    // Generate logs for current operation
+    const operationLogs = [
+      { level: 'INFO', message: 'Starting trace-linked log generation operation', time: 0 },
+      { level: 'DEBUG', message: 'Querying ClickHouse for recent traces', time: 50 },
+      { level: 'INFO', message: `Found ${recentTraces.length} recent traces for log correlation`, time: 100 },
+      { level: 'DEBUG', message: 'Generating correlated log entries', time: 150 },
+      { level: 'INFO', message: 'Trace-linked logs generated successfully', time: 200 }
+    ];
+
+    operationLogs.forEach((log, index) => {
+      const timestamp = new Date(Date.now() + log.time);
+      
+      logEntries.push({
+        Timestamp: timestamp.toISOString().replace('T', ' ').replace('Z', ''),
+        TraceId: currentTraceId,
+        SpanId: currentSpanId,
+        TraceFlags: 0,
+        SeverityText: log.level,
+        SeverityNumber: log.level === 'ERROR' ? 17 : log.level === 'WARN' ? 13 : log.level === 'INFO' ? 9 : 5,
+        ServiceName: 'AppSentry Backend',
+        Body: log.message,
+        ResourceSchemaUrl: '',
+        ResourceAttributes: {
+          'service.name': 'AppSentry Backend',
+          'service.version': '1.0.0',
+          'deployment.environment': 'development'
+        },
+        ScopeSchemaUrl: '',
+        ScopeName: 'winston',
+        ScopeVersion: '1.0.0',
+        ScopeAttributes: {},
+        LogAttributes: {
+          'log.logger': 'winston',
+          'log.level': log.level.toLowerCase(),
+          'operation.name': 'generate_trace_logs',
+          'operation.step': index + 1,
+          'log.correlation': 'trace_linked'
         }
-        
-        span.end();
-      } catch (error) {
-        logger.error('Background telemetry generation error', { error });
+      });
+
+      // Also log with winston to show console correlation
+      const logLevel = log.level.toLowerCase();
+      if (logLevel === 'debug') {
+        logger.debug(`${log.message} [step=${index + 1}]`);
+      } else if (logLevel === 'info') {
+        logger.info(`${log.message} [step=${index + 1}]`);
+      } else if (logLevel === 'warn') {
+        logger.warn(`${log.message} [step=${index + 1}]`);
+      } else if (logLevel === 'error') {
+        logger.error(`${log.message} [step=${index + 1}]`);
       }
-    }, 10000);
+    });
+
+    // Generate logs for existing traces
+    recentTraces.forEach((trace: any, index: number) => {
+      const logMessages = [
+        `Trace ${trace.trace_id.substring(0, 8)} processed successfully`,
+        `Operation "${trace.operation_name}" completed in ${parseFloat(trace.duration_ns) / 1000000}ms`,
+        `Service "${trace.service_name}" reported status: ${trace.status_code === '0' ? 'OK' : 'ERROR'}`
+      ];
+
+      logMessages.forEach((message, msgIndex) => {
+        const timestamp = new Date(Date.now() - Math.random() * 300000);
+        
+        logEntries.push({
+          Timestamp: timestamp.toISOString().replace('T', ' ').replace('Z', ''),
+          TraceId: trace.trace_id,
+          SpanId: trace.span_id,
+          TraceFlags: 0,
+          SeverityText: trace.status_code === '0' ? 'INFO' : 'ERROR',
+          SeverityNumber: trace.status_code === '0' ? 9 : 17,
+          ServiceName: trace.service_name,
+          Body: message,
+          ResourceSchemaUrl: '',
+          ResourceAttributes: {
+            'service.name': trace.service_name,
+            'service.version': '1.0.0',
+            'deployment.environment': 'development'
+          },
+          ScopeSchemaUrl: '',
+          ScopeName: 'winston',
+          ScopeVersion: '1.0.0',
+          ScopeAttributes: {},
+          LogAttributes: {
+            'log.logger': 'winston',
+            'log.level': trace.status_code === '0' ? 'info' : 'error',
+            'operation.name': trace.operation_name,
+            'trace.correlated': 'true',
+            'log.source': 'post_processing'
+          }
+        });
+      });
+    });
+
+    // Insert all logs
+    await clickHouseService.insertLogs(logEntries);
     
-    // Store interval ID for cleanup (in a real app, you'd want to manage this properly)
-    (global as any).telemetryInterval = interval;
-    
-    logger.info('Started continuous telemetry generation');
-    
+    span.setAttributes({
+      'logs.generated': logEntries.length,
+      'traces.correlated': recentTraces.length,
+      'operation.type': 'generate_trace_logs'
+    });
+
+    logger.info('Trace-linked logs generated successfully', {
+      totalLogs: logEntries.length,
+      correlatedTraces: recentTraces.length,
+      currentTraceId: currentTraceId
+    });
+
     res.json({
       success: true,
-      message: 'Continuous telemetry generation started',
-      intervalMs: 10000
+      message: `Generated ${logEntries.length} trace-linked logs`,
+      details: {
+        totalLogs: logEntries.length,
+        correlatedTraces: recentTraces.length,
+        currentTraceId: currentTraceId
+      }
+    });
+
+    span.setStatus({ code: 1 });
+    span.end();
+
+  } catch (error) {
+    logger.error('Failed to generate trace-linked logs', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined
     });
     
-  } catch (error) {
-    logger.error('Failed to start continuous telemetry generation', { error });
+    span.recordException(error as Error);
+    span.setStatus({ code: 2, message: (error as Error).message });
+    span.end();
+    
     res.status(500).json({
       success: false,
-      error: 'Failed to start continuous generation'
+      error: 'Failed to generate trace-linked logs'
     });
   }
 });
 
-// Stop continuous generation
-router.post('/stop-continuous-generation', async (req: Request, res: Response) => {
+// Generate sample logs for demonstration
+router.post('/generate-logs', async (req: Request, res: Response) => {
   try {
-    const interval = (global as any).telemetryInterval;
-    if (interval) {
-      clearInterval(interval);
-      delete (global as any).telemetryInterval;
-      
-      logger.info('Stopped continuous telemetry generation');
-      
-      res.json({
-        success: true,
-        message: 'Continuous telemetry generation stopped'
-      });
-    } else {
-      res.json({
-        success: true,
-        message: 'No continuous generation was running'
-      });
+    const { clickHouseService } = require('../services/clickhouseService');
+    const count = req.body.count || 5;
+    
+    const sampleLogs = [];
+    const logLevels = ['INFO', 'DEBUG', 'WARN', 'ERROR'];
+    const operations = [
+      'User authentication successful',
+      'Database query executed',
+      'Health check completed',
+      'Application stats calculated',
+      'Platform metrics retrieved',
+      'Trace generation completed',
+      'Cache operation performed',
+      'Configuration loaded',
+      'Service connection established',
+      'Request processing finished'
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const timestamp = new Date(Date.now() - Math.random() * 300000); // Last 5 minutes
+      const level = logLevels[Math.floor(Math.random() * logLevels.length)];
+      const operation = operations[Math.floor(Math.random() * operations.length)];
+      const traceId = Math.random().toString(16).substring(2, 18).padEnd(32, '0');
+      const spanId = Math.random().toString(16).substring(2, 10).padEnd(16, '0');
+
+      const logRecord = {
+        Timestamp: timestamp.toISOString().replace('T', ' ').replace('Z', ''),
+        TraceId: traceId,
+        SpanId: spanId,
+        TraceFlags: 0,
+        SeverityText: level,
+        SeverityNumber: level === 'ERROR' ? 17 : level === 'WARN' ? 13 : level === 'INFO' ? 9 : 5,
+        ServiceName: 'AppSentry Backend',
+        Body: operation,
+        ResourceSchemaUrl: '',
+        ResourceAttributes: {
+          'service.name': 'AppSentry Backend',
+          'service.version': '1.0.0',
+          'deployment.environment': 'development'
+        },
+        ScopeSchemaUrl: '',
+        ScopeName: 'winston',
+        ScopeVersion: '1.0.0',
+        ScopeAttributes: {},
+        LogAttributes: {
+          'log.logger': 'winston',
+          'log.level': level.toLowerCase(),
+          'operation.type': operation.split(' ')[0].toLowerCase()
+        }
+      };
+
+      sampleLogs.push(logRecord);
     }
+
+    // Insert logs into ClickHouse
+    await clickHouseService.insertLogs(sampleLogs);
+    
+    logger.info('Sample logs generated successfully', {
+      count: sampleLogs.length,
+      levels: logLevels
+    });
+
+    res.json({
+      success: true,
+      message: `Generated ${sampleLogs.length} sample logs`,
+      count: sampleLogs.length
+    });
+
   } catch (error) {
-    logger.error('Failed to stop continuous telemetry generation', { error });
+    logger.error('Failed to generate sample logs', {
+      error: error instanceof Error ? error.message : error
+    });
     res.status(500).json({
       success: false,
-      error: 'Failed to stop continuous generation'
+      error: 'Failed to generate sample logs'
+    });
+  }
+});
+
+// Health endpoint for telemetry service
+router.get('/health', (req: Request, res: Response) => {
+  try {
+    const span = tracer.startSpan('telemetry_health_check');
+    
+    // Record a health check metric
+    healthCheckCounter.add(1, {
+      service: 'telemetry',
+      status: 'healthy'
+    });
+
+    span.setAttributes({
+      'health.status': 'healthy',
+      'health.service': 'telemetry'
+    });
+
+    res.json({
+      success: true,
+      status: 'healthy',
+      service: 'telemetry',
+      timestamp: new Date().toISOString()
+    });
+
+    span.end();
+  } catch (error) {
+    logger.error('Telemetry health check failed:', error);
+    res.status(500).json({
+      success: false,
+      status: 'unhealthy',
+      error: 'Health check failed'
     });
   }
 });

@@ -27,8 +27,34 @@ interface LogFilter {
   service: string[];
   searchTerm: string;
   timeRange: string;
+  applicationFilter: string;
   customTimeStart?: Date;
   customTimeEnd?: Date;
+}
+
+interface Application {
+  id: string;
+  name: string;
+  service_name: string;
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  last_seen: string;
+}
+
+interface ServiceLogGroup {
+  serviceName: string;
+  totalLogs: number;
+  pods: Set<string>;
+  errorCount: number;
+  warnCount: number;
+  infoCount: number;
+  debugCount: number;
+  latestLog: LogEntry;
+  oldestLog: LogEntry;
+  logs: LogEntry[];
+}
+
+interface AggregatedView {
+  [serviceName: string]: ServiceLogGroup;
 }
 
 const LogsPage: React.FC = () => {
@@ -41,10 +67,17 @@ const LogsPage: React.FC = () => {
     service: [],
     searchTerm: '',
     timeRange: '24h',
+    applicationFilter: '',
   });
+
+  // Get unique services from logs
+  const availableServices = Array.from(new Set(logs.map(log => log.service))).sort();
   const [showFilters, setShowFilters] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(10000);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'aggregated'>('all');
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
 
   // Generate mock log data
   const generateMockLogs = (): LogEntry[] => {
@@ -107,6 +140,7 @@ const LogsPage: React.FC = () => {
         ...(filters.service.length > 0 && { serviceName: filters.service[0] }), // Use first selected service
         ...(filters.level.length > 0 && { severityLevel: filters.level[0] }), // Use first selected level
         ...(filters.searchTerm && { searchTerm: filters.searchTerm }),
+        ...(filters.applicationFilter && { applicationName: filters.applicationFilter }),
         limit: '100'
       });
 
@@ -116,8 +150,8 @@ const LogsPage: React.FC = () => {
       if (response.ok) {
         console.log('Raw logs data:', data.logs?.length || 0, 'logs');
         // Transform ClickHouse logs to expected format
-        const transformedLogs: LogEntry[] = (data.logs || []).map((log: any) => ({
-          id: `${log.trace_id || 'no-trace'}-${log.span_id || 'no-span'}-${new Date(log.timestamp.replace(' ', 'T') + 'Z').getTime()}`,
+        const transformedLogs: LogEntry[] = (data.logs || []).map((log: any, index: number) => ({
+          id: `${log.trace_id || 'no-trace'}-${log.span_id || 'no-span'}-${new Date(log.timestamp.replace(' ', 'T') + 'Z').getTime()}-${index}`,
           timestamp: log.timestamp.replace(' ', 'T') + 'Z', // Convert to ISO format
           level: log.severity_text as LogEntry['level'],
           service: log.service_name,
@@ -146,6 +180,11 @@ const LogsPage: React.FC = () => {
     }
   };
 
+  // Load applications for filtering
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
   useEffect(() => {
     loadLogs();
     
@@ -154,6 +193,23 @@ const LogsPage: React.FC = () => {
       return () => clearInterval(interval);
     }
   }, [filters, autoRefresh, refreshInterval]);
+
+  const loadApplications = async () => {
+    try {
+      const response = await fetch('/api/applications');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setApplications(data.applications || []);
+      } else {
+        console.error('Failed to fetch applications:', data.error);
+        setApplications([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+      setApplications([]);
+    }
+  };
 
   // Filter logs based on current filters
   const filteredLogs = logs.filter(log => {
@@ -180,6 +236,72 @@ const LogsPage: React.FC = () => {
     
     return true;
   });
+
+  // Create aggregated view by service
+  const aggregatedLogs: AggregatedView = filteredLogs.reduce((acc, log) => {
+    const serviceName = log.service;
+    
+    if (!acc[serviceName]) {
+      acc[serviceName] = {
+        serviceName,
+        totalLogs: 0,
+        pods: new Set(),
+        errorCount: 0,
+        warnCount: 0,
+        infoCount: 0,
+        debugCount: 0,
+        latestLog: log,
+        oldestLog: log,
+        logs: []
+      };
+    }
+    
+    const group = acc[serviceName];
+    group.totalLogs++;
+    group.logs.push(log);
+    
+    // Extract pod name from resource attributes if available
+    const podName = log.resource?.serviceName || log.service;
+    group.pods.add(podName);
+    
+    // Count by log level
+    switch (log.level) {
+      case 'ERROR':
+      case 'FATAL':
+        group.errorCount++;
+        break;
+      case 'WARN':
+        group.warnCount++;
+        break;
+      case 'INFO':
+        group.infoCount++;
+        break;
+      case 'DEBUG':
+        group.debugCount++;
+        break;
+    }
+    
+    // Update latest/oldest logs
+    if (new Date(log.timestamp) > new Date(group.latestLog.timestamp)) {
+      group.latestLog = log;
+    }
+    if (new Date(log.timestamp) < new Date(group.oldestLog.timestamp)) {
+      group.oldestLog = log;
+    }
+    
+    return acc;
+  }, {} as AggregatedView);
+
+  // Toggle service expansion
+  const toggleServiceExpansion = (serviceName: string) => {
+    const newExpanded = new Set(expandedServices);
+    if (newExpanded.has(serviceName)) {
+      newExpanded.delete(serviceName);
+    } else {
+      newExpanded.add(serviceName);
+    }
+    setExpandedServices(newExpanded);
+  };
 
   // Get log level icon
   const getLogLevelIcon = (level: string) => {
@@ -267,6 +389,19 @@ const LogsPage: React.FC = () => {
           </div>
 
           <select 
+            value={filters.applicationFilter} 
+            onChange={(e) => setFilters({ ...filters, applicationFilter: e.target.value })}
+            className="application-filter"
+          >
+            <option value="">All Applications</option>
+            {applications.map((app) => (
+              <option key={app.id} value={app.name}>
+                {app.name}
+              </option>
+            ))}
+          </select>
+
+          <select 
             value={filters.timeRange} 
             onChange={(e) => setFilters({ ...filters, timeRange: e.target.value })}
             className="time-range-select"
@@ -279,6 +414,21 @@ const LogsPage: React.FC = () => {
             <option value="7d">Last 7 days</option>
             <option value="custom">Custom range</option>
           </select>
+
+          <div className="view-toggle">
+            <button 
+              className={`view-btn ${viewMode === 'all' ? 'active' : ''}`}
+              onClick={() => setViewMode('all')}
+            >
+              All Logs
+            </button>
+            <button 
+              className={`view-btn ${viewMode === 'aggregated' ? 'active' : ''}`}
+              onClick={() => setViewMode('aggregated')}
+            >
+              By Service
+            </button>
+          </div>
 
           <button 
             className={`filter-toggle ${showFilters ? 'active' : ''}`}
@@ -341,7 +491,7 @@ const LogsPage: React.FC = () => {
             <div className="filter-section">
               <h4>Service</h4>
               <div className="filter-options">
-                {['appsentry-frontend', 'appsentry-backend', 'database', 'redis'].map(service => (
+                {availableServices.map(service => (
                   <label key={service} className="filter-checkbox">
                     <input
                       type="checkbox"
@@ -364,10 +514,15 @@ const LogsPage: React.FC = () => {
 
         <div className="logs-list">
           <div className="logs-count">
-            Showing {filteredLogs.length} of {logs.length} logs
+            {viewMode === 'all' 
+              ? `Showing ${filteredLogs.length} of ${logs.length} logs`
+              : `Showing ${Object.keys(aggregatedLogs).length} services with ${filteredLogs.length} total logs`
+            }
           </div>
 
-          {filteredLogs.map(log => (
+          {viewMode === 'all' ? (
+            // All Logs View
+            filteredLogs.map(log => (
             <div key={log.id} className={`log-entry ${expandedLogs.has(log.id) ? 'expanded' : ''}`}>
               <div className="log-header" onClick={() => toggleLogExpansion(log.id)}>
                 <div className="log-expand-icon">
@@ -422,7 +577,96 @@ const LogsPage: React.FC = () => {
                 </div>
               )}
             </div>
-          ))}
+          ))
+          ) : (
+            // Aggregated View by Service
+            Object.entries(aggregatedLogs).map(([serviceName, group]) => (
+              <div key={serviceName} className="service-group">
+                <div 
+                  className="service-header" 
+                  onClick={() => toggleServiceExpansion(serviceName)}
+                >
+                  <div className="service-expand-icon">
+                    {expandedServices.has(serviceName) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
+                  <div className="service-name">{serviceName}</div>
+                  <div className="service-stats">
+                    <span className="log-count">{group.totalLogs} logs</span>
+                    <span className="pod-count">{group.pods.size} pods</span>
+                    {group.errorCount > 0 && (
+                      <span className="error-badge">{group.errorCount} errors</span>
+                    )}
+                    {group.warnCount > 0 && (
+                      <span className="warn-badge">{group.warnCount} warnings</span>
+                    )}
+                  </div>
+                  <div className="service-last-activity">
+                    Last: {formatTimestamp(group.latestLog.timestamp)}
+                  </div>
+                </div>
+                
+                {expandedServices.has(serviceName) && (
+                  <div className="service-logs">
+                    {group.logs.map(log => (
+                      <div key={log.id} className={`log-entry ${expandedLogs.has(log.id) ? 'expanded' : ''}`}>
+                        <div className="log-header" onClick={() => toggleLogExpansion(log.id)}>
+                          <div className="log-expand-icon">
+                            {expandedLogs.has(log.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+                          <div className={`log-level ${getLogLevelClass(log.level)}`}>
+                            {getLogLevelIcon(log.level)}
+                            {log.level}
+                          </div>
+                          <div className="log-timestamp">{formatTimestamp(log.timestamp)}</div>
+                          <div className="log-message">{log.message}</div>
+                          <div className="log-actions">
+                            {log.traceId && (
+                              <button className="trace-link" title="View trace">
+                                <GitBranch size={14} />
+                              </button>
+                            )}
+                            <button className="copy-btn" onClick={(e) => {
+                              e.stopPropagation();
+                              copyToClipboard(log);
+                            }}>
+                              <Copy size={14} />
+                            </button>
+                            <button className="expand-btn" onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLog(log);
+                            }}>
+                              <Maximize2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {expandedLogs.has(log.id) && (
+                          <div className="log-details">
+                            {log.traceId && (
+                              <div className="log-detail-row">
+                                <span className="detail-label">Trace ID:</span>
+                                <span className="detail-value">{log.traceId}</span>
+                              </div>
+                            )}
+                            {log.spanId && (
+                              <div className="log-detail-row">
+                                <span className="detail-label">Span ID:</span>
+                                <span className="detail-value">{log.spanId}</span>
+                              </div>
+                            )}
+                            <div className="log-detail-row">
+                              <span className="detail-label">Attributes:</span>
+                              <pre className="detail-json">{JSON.stringify(log.attributes, null, 2)}</pre>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 

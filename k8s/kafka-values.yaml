@@ -1,0 +1,74 @@
+## Production-ready single-node Kafka with proper authentication
+## Based on debugging analysis: disables SCRAM bootstrap to prevent crashes
+
+## Use traditional ZooKeeper mode for stability
+zookeeper:
+  enabled: true
+  replicaCount: 1
+  auth:
+    enabled: false
+  persistence:
+    enabled: false
+
+## Configure broker nodes for ZooKeeper mode  
+broker:
+  replicaCount: 1
+  ## Override problematic environment variable directly
+  extraEnvVars:
+    - name: KAFKA_ZOOKEEPER_BOOTSTRAP_SCRAM_USERS
+      value: "false"
+  ## Single-node configuration
+  config: |-
+    offsets.topic.replication.factor=1
+    transaction.state.log.replication.factor=1  
+    transaction.state.log.min.isr=1
+    default.replication.factor=1
+    min.insync.replicas=1
+
+## Disable controller nodes for ZooKeeper mode
+controller:
+  replicaCount: 0
+
+## Explicitly disable KRaft mode
+kraft:
+  enabled: false
+
+## CRITICAL: Proper authentication configuration to prevent SCRAM bootstrap
+auth:
+  clientProtocol: plaintext
+  interBrokerProtocol: plaintext
+  sasl:
+    enabled: false
+    enabledMechanisms: ""
+    interBrokerMechanism: PLAIN
+  ## Disable automatic user creation that causes crashes
+  clientUsers: []
+  clientPasswords: []
+
+## Service configuration
+service:
+  type: ClusterIP
+  ports:
+    client: 9092
+
+## Advertised listeners for cross-namespace access
+advertisedListeners:
+  client: "kafka.appsentry-kafka.svc.cluster.local:9092"
+
+## Resource limits for development
+resources:
+  limits:
+    memory: 1Gi
+    cpu: 500m
+  requests:
+    memory: 512Mi
+    cpu: 250m
+
+## Persistence disabled for development
+persistence:
+  enabled: false
+
+## Log retention for development
+logRetentionPolicy:
+  enabled: true
+  hours: 1

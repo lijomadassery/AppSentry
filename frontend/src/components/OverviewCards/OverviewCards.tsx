@@ -8,8 +8,10 @@ import {
   CheckCircle,
   XCircle,
   Zap,
+  Heart,
 } from 'lucide-react';
 import { DashboardStats } from '../../types';
+import { useApp } from '../../contexts/AppContext';
 import './OverviewCards.css';
 
 interface OverviewCardsProps {
@@ -31,11 +33,14 @@ interface OverviewCard {
 }
 
 export const OverviewCards: React.FC<OverviewCardsProps> = ({ stats }) => {
+  const { state } = useApp();
+  const { healthMetrics } = state;
+
   const cards: OverviewCard[] = [
     {
       id: 'total-apps',
       title: 'Total Applications',
-      value: stats.totalApplications,
+      value: healthMetrics?.metrics.totalApplications || stats.totalApplications,
       subValue: 'Active monitoring',
       icon: <Server size={24} />,
       trend: {
@@ -46,11 +51,11 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ stats }) => {
       color: 'blue',
     },
     {
-      id: 'success-rate',
-      title: 'Success Rate',
-      value: `${Math.round(((stats.healthyCount / stats.totalApplications) * 100))}%`,
-      subValue: `${stats.healthyCount}/${stats.totalApplications} healthy`,
-      icon: <CheckCircle size={24} />,
+      id: 'health-percentage',
+      title: 'Health Score',
+      value: `${healthMetrics?.metrics.healthPercentage || Math.round(((stats.healthyCount / stats.totalApplications) * 100))}%`,
+      subValue: `${healthMetrics?.metrics.healthyApplications || stats.healthyCount}/${healthMetrics?.metrics.totalApplications || stats.totalApplications} healthy`,
+      icon: <Heart size={24} />,
       trend: {
         value: 2.5,
         isPositive: true,
@@ -99,10 +104,10 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ stats }) => {
     },
     {
       id: 'issues',
-      title: 'Active Issues',
-      value: stats.errorCount + stats.warningCount,
-      subValue: `${stats.errorCount} critical, ${stats.warningCount} warnings`,
-      icon: stats.errorCount > 0 ? <XCircle size={24} /> : <AlertTriangle size={24} />,
+      title: 'Health Issues',
+      value: (healthMetrics?.metrics.unhealthyApplications || stats.errorCount) + (healthMetrics?.metrics.unknownApplications || stats.warningCount),
+      subValue: `${healthMetrics?.metrics.unhealthyApplications || stats.errorCount} unhealthy, ${healthMetrics?.metrics.unknownApplications || stats.warningCount} unknown`,
+      icon: (healthMetrics?.metrics.unhealthyApplications || stats.errorCount) > 0 ? <XCircle size={24} /> : <AlertTriangle size={24} />,
       trend: {
         value: 25,
         isPositive: false,

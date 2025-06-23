@@ -11,6 +11,7 @@ import { requestLogger } from './middlewares/requestLogger';
 import { apiLimiter } from './middlewares/rateLimiter';
 import { logger } from './utils/logger';
 import { database } from './database/prisma';
+import { healthCheckService } from './services/healthCheckService';
 
 export class App {
   public app: Application;
@@ -68,6 +69,12 @@ export class App {
     // Health check endpoint (no auth required)
     this.app.get('/health', async (req, res) => {
       try {
+        logger.info('Health check requested', { 
+          operation: 'health_check', 
+          source: 'api_endpoint',
+          client_ip: req.ip
+        });
+
         const { clickHouseService } = require('./services/clickhouseService');
         
         // Check ClickHouse connectivity
@@ -77,6 +84,13 @@ export class App {
         const isHealthy = clickHouseHealthy;
         const status = isHealthy ? 'healthy' : 'degraded';
         
+        logger.info(`Health check completed: ${status}`, {
+          operation: 'health_check',
+          status,
+          clickhouse_healthy: clickHouseHealthy,
+          uptime_seconds: Math.floor(process.uptime())
+        });
+
         res.status(isHealthy ? 200 : 503).json({
           status,
           timestamp: new Date().toISOString(),
@@ -90,6 +104,12 @@ export class App {
           }
         });
       } catch (error) {
+        logger.error('Health check failed', { 
+          operation: 'health_check',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+
         res.status(503).json({
           status: 'unhealthy',
           timestamp: new Date().toISOString(),
@@ -112,6 +132,7 @@ export class App {
     const telemetryRoutes = require('./routes/telemetry.routes').default;
     const registryRoutes = require('./routes/registry.routes').default;
     const platformMetricsRoutes = require('./routes/platformMetrics.routes').default;
+    const healthCheckRoutes = require('./routes/healthCheck.routes').default;
 
     // OTEL data ingestion routes (no rate limiting)
     this.app.use('/api/otel', otelRoutes);
@@ -125,6 +146,7 @@ export class App {
     // New application registry and platform routes
     this.app.use('/api/registry/applications', registryRoutes);
     this.app.use('/api/platform', platformMetricsRoutes);
+    this.app.use('/api/health-checks', healthCheckRoutes);
     
     // API info endpoint
     this.app.get('/api', (req, res) => {
@@ -140,6 +162,7 @@ export class App {
           telemetry: '/api/telemetry',
           registry: '/api/registry/applications',
           platform: '/api/platform',
+          healthChecks: '/api/health-checks',
           health: '/health',
         },
       });
@@ -172,6 +195,17 @@ export class App {
     try {
       // await database.connect(); // TEMPORARILY DISABLED
       logger.info('Database initialization skipped temporarily');
+      
+      // Start health check scheduler
+      setTimeout(async () => {
+        try {
+          await healthCheckService.startScheduler();
+          logger.info('Health check scheduler initialized successfully');
+        } catch (error) {
+          logger.error('Failed to start health check scheduler:', error);
+        }
+      }, 5000); // Wait 5 seconds for services to be ready
+      
     } catch (error) {
       logger.error('Failed to initialize database:', error);
       throw error;
@@ -179,8 +213,9 @@ export class App {
   }
 
   public listen(): void {
-    this.server.listen(config.port, () => {
+    this.server.listen(config.port, '0.0.0.0', () => {
       logger.info(`Server is running on port ${config.port} in ${config.env} mode`);
+      logger.info(`Server accessible from external hosts on 0.0.0.0:${config.port}`);
     });
   }
 }

@@ -17,15 +17,17 @@ CREATE TABLE IF NOT EXISTS applications
     namespace String,
     environment Enum8('development' = 1, 'staging' = 2, 'production' = 3) DEFAULT 'development',
     health_check_url String,
-    health_check_interval UInt32 DEFAULT 30, -- seconds
-    status Enum8('unknown' = 0, 'healthy' = 1, 'degraded' = 2, 'down' = 3) DEFAULT 'unknown',
-    last_check_time DateTime64(3, 'UTC'),
+    health_check_interval UInt32 DEFAULT 60, -- seconds
+    health_check_timeout UInt32 DEFAULT 5000, -- milliseconds
+    current_status Enum8('unknown' = 0, 'healthy' = 1, 'unhealthy' = 2) DEFAULT 'unknown',
+    last_health_check DateTime64(3, 'UTC'),
+    error_message String DEFAULT '',
     created_at DateTime64(3, 'UTC') DEFAULT now64(3),
     updated_at DateTime64(3, 'UTC') DEFAULT now64(3),
     metadata String, -- JSON string for additional data
     tags Array(String),
     sla_target Float32 DEFAULT 99.9, -- percentage
-    active Bool DEFAULT true
+    enabled Bool DEFAULT true
 ) ENGINE = MergeTree()
 ORDER BY (team, namespace, name)
 PARTITION BY toYYYYMM(created_at)
@@ -37,17 +39,17 @@ CREATE TABLE IF NOT EXISTS health_checks
 (
     id String DEFAULT generateUUIDv4(),
     application_id String,
-    check_time DateTime64(3, 'UTC') DEFAULT now64(3),
-    status Enum8('healthy' = 1, 'degraded' = 2, 'down' = 3),
+    timestamp DateTime64(3, 'UTC') DEFAULT now64(3),
+    status Enum8('healthy' = 1, 'unhealthy' = 2, 'unknown' = 3),
     response_time_ms UInt32,
-    status_code UInt16,
-    error_message String,
-    details String, -- JSON string for additional check details
+    status_code UInt16 DEFAULT 0,
+    error_message String DEFAULT '',
+    details String DEFAULT '{}', -- JSON string for additional check details
     check_type Enum8('http' = 1, 'tcp' = 2, 'grpc' = 3, 'custom' = 4) DEFAULT 'http'
 ) ENGINE = MergeTree()
-ORDER BY (application_id, check_time)
-PARTITION BY toYYYYMMDD(check_time)
-TTL check_time + INTERVAL 30 DAY;
+ORDER BY (application_id, timestamp)
+PARTITION BY toYYYYMMDD(timestamp)
+TTL timestamp + INTERVAL 30 DAY;
 
 -- Application SLA metrics table (pre-aggregated)
 -- Stores daily/hourly SLA calculations
@@ -93,14 +95,14 @@ ENGINE = ReplacingMergeTree()
 ORDER BY application_id
 AS SELECT
     application_id,
-    argMax(status, check_time) as current_status,
-    max(check_time) as last_check_time,
-    argMax(response_time_ms, check_time) as last_response_time_ms,
-    countIf(status = 'healthy', check_time > now() - INTERVAL 1 HOUR) as healthy_checks_1h,
-    countIf(status != 'healthy', check_time > now() - INTERVAL 1 HOUR) as unhealthy_checks_1h,
+    argMax(status, timestamp) as current_status,
+    max(timestamp) as last_check_time,
+    argMax(response_time_ms, timestamp) as last_response_time_ms,
+    countIf(status = 'healthy', timestamp > now() - INTERVAL 1 HOUR) as healthy_checks_1h,
+    countIf(status != 'healthy', timestamp > now() - INTERVAL 1 HOUR) as unhealthy_checks_1h,
     avg(response_time_ms) as avg_response_time_1h
 FROM health_checks
-WHERE check_time > now() - INTERVAL 1 DAY
+WHERE timestamp > now() - INTERVAL 1 DAY
 GROUP BY application_id;
 
 -- Create materialized view for SLA calculation
@@ -109,11 +111,11 @@ ENGINE = AggregatingMergeTree()
 ORDER BY (application_id, window_start)
 AS SELECT
     application_id,
-    tumbleStart(check_time, INTERVAL 1 HOUR) as window_start,
+    tumbleStart(timestamp, INTERVAL 1 HOUR) as window_start,
     count() as total_checks,
     countIf(status = 'healthy') as healthy_checks,
-    countIf(status = 'degraded') as degraded_checks,
-    countIf(status = 'down') as down_checks,
+    countIf(status = 'unhealthy') as unhealthy_checks,
+    countIf(status = 'unknown') as unknown_checks,
     (healthy_checks * 100.0) / total_checks as availability_percentage,
     avg(response_time_ms) as avg_response_time,
     quantile(0.95)(response_time_ms) as p95_response_time,
@@ -122,7 +124,7 @@ FROM health_checks
 GROUP BY application_id, window_start;
 
 -- Indexes for better query performance
-ALTER TABLE applications ADD INDEX idx_status (status) TYPE set(0) GRANULARITY 4;
+ALTER TABLE applications ADD INDEX idx_current_status (current_status) TYPE set(0) GRANULARITY 4;
 ALTER TABLE applications ADD INDEX idx_team (team) TYPE bloom_filter() GRANULARITY 4;
 ALTER TABLE health_checks ADD INDEX idx_app_status (application_id, status) TYPE minmax GRANULARITY 4;
 

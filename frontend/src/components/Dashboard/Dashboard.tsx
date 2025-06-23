@@ -5,7 +5,6 @@ import { ApplicationsGrid } from '../ApplicationsGrid/ApplicationsGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { ApplicationModal } from '../ApplicationModal/ApplicationModal';
 import { ReportsModal } from '../ReportsModal/ReportsModal';
-import { WebSocketDemo } from '../WebSocketDemo/WebSocketDemo';
 import { LeftNavigation } from '../LeftNavigation/LeftNavigation';
 import { OverviewCards } from '../OverviewCards/OverviewCards';
 import { ApplicationsPage } from '../ApplicationsPage/ApplicationsPage';
@@ -18,6 +17,9 @@ import MetricsPage from '../MetricsPage/MetricsPage';
 import LogsPage from '../LogsPage/LogsPage';
 import ServiceMapPage from '../ServiceMapPage/ServiceMapPage';
 import QueryBuilderPage from '../QueryBuilderPage/QueryBuilderPage';
+import KubernetesNodeMetrics from '../KubernetesNodeMetrics/KubernetesNodeMetrics';
+import KubernetesPodMetrics from '../KubernetesPodMetrics/KubernetesPodMetrics';
+import KubernetesWorkloadHealth from '../KubernetesWorkloadHealth/KubernetesWorkloadHealth';
 import { GlobalMessage } from '../GlobalMessage/GlobalMessage';
 import { PerformanceMonitor } from '../PerformanceMonitor/PerformanceMonitor';
 import { PlatformMetrics } from '../PlatformMetrics/PlatformMetrics';
@@ -82,10 +84,6 @@ export const Dashboard: React.FC = () => {
   const { 
     connected, 
     connecting, 
-    testProgress, 
-    activities, 
-    subscribeToTestRun, 
-    unsubscribeFromTestRun,
     reconnect,
     onApplicationUpdate,
     onTestRunCompleted,
@@ -95,17 +93,6 @@ export const Dashboard: React.FC = () => {
   // Note: Initial data loading is now handled in AppContext
 
   // WebSocket event handlers
-  useEffect(() => {
-    if (currentTestRun) {
-      subscribeToTestRun(currentTestRun.id);
-    }
-    
-    return () => {
-      if (currentTestRun) {
-        unsubscribeFromTestRun(currentTestRun.id);
-      }
-    };
-  }, [currentTestRun, subscribeToTestRun, unsubscribeFromTestRun]);
 
   // Handle real-time application updates
   useEffect(() => {
@@ -172,29 +159,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [applications, startTestRun, dispatch]);
 
-  const handleRunAllTests = async () => {
-    try {
-      console.log('Starting health checks for all applications...');
-      const response = await testApi.runAll();
-      const testRun: TestRun = {
-        id: response.testRunId,
-        status: 'running',
-        applications: applications.map(app => app.id),
-        progressTotal: applications.length * 2, // Health check + login test
-        progressCompleted: 0,
-        startedAt: new Date(),
-      };
-      startTestRun(testRun);
-      console.log('Health checks started successfully:', response.testRunId);
-    } catch (err) {
-      console.error('Failed to start test run:', err);
-      dispatch({ 
-        type: 'SHOW_MESSAGE', 
-        payload: { type: 'error', message: 'Failed to start health checks. Please check your connection.' }
-      });
-    }
-  };
-
   const handleRunSingleTest = async (appId: string) => {
     try {
       const response = await testApi.runSingle(appId);
@@ -213,21 +177,6 @@ export const Dashboard: React.FC = () => {
         type: 'SHOW_MESSAGE', 
         payload: { type: 'error', message: 'Failed to start test' }
       });
-    }
-  };
-
-  const handleCancelTest = async () => {
-    if (currentTestRun) {
-      try {
-        await testApi.cancel(currentTestRun.id);
-        dispatch({ type: 'TEST_RUN_CANCEL' });
-      } catch (err) {
-        console.error('Failed to cancel test:', err);
-        dispatch({ 
-          type: 'SHOW_MESSAGE', 
-          payload: { type: 'error', message: 'Failed to cancel test' }
-        });
-      }
     }
   };
 
@@ -275,25 +224,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // WebSocket simulation handlers
-  const handleSimulateTest = () => {
-    if (process.env.NODE_ENV === 'development' && !webSocketSimulator.isRunning()) {
-      webSocketSimulator.simulateTestRun(applications);
-    }
-  };
-
-  const handleSimulateStatusUpdate = () => {
-    if (process.env.NODE_ENV === 'development' && applications.length > 0) {
-      const randomApp = applications[Math.floor(Math.random() * applications.length)];
-      webSocketSimulator.simulateApplicationStatusUpdate(randomApp);
-    }
-  };
-
-  const handleSimulateActivity = () => {
-    if (process.env.NODE_ENV === 'development') {
-      webSocketSimulator.simulateRandomActivity();
-    }
-  };
 
   // Navigation handlers
   const handleToggleNavCollapse = () => {
@@ -360,9 +290,20 @@ export const Dashboard: React.FC = () => {
     console.log('Update preferences:', preferences);
   };
 
+  // Navigation handler for Kubernetes detail pages
+  const handleNavigateToK8sDetail = (page: string) => {
+    handleRouteChange(page);
+  };
+
   // Render the appropriate page based on active route
   const renderPageContent = () => {
     switch (activeRoute) {
+      case 'k8s-node-metrics':
+        return <KubernetesNodeMetrics />;
+      case 'k8s-pod-metrics':
+        return <KubernetesPodMetrics />;
+      case 'k8s-workload-health':
+        return <KubernetesWorkloadHealth />;
       case 'applications':
         return (
           <ApplicationsPage
@@ -386,7 +327,7 @@ export const Dashboard: React.FC = () => {
       case 'analytics':
         return (
           <AnalyticsPage
-            applications={applications}
+            applications={Array.isArray(applications) ? applications : []}
             testResults={[]}
           />
         );
@@ -453,120 +394,16 @@ export const Dashboard: React.FC = () => {
               loading={clusterMetricsLoading}
               error={clusterMetricsError}
               onRefresh={handleRefreshPlatformMetrics}
+              onNavigateToDetail={handleNavigateToK8sDetail}
             />
             
-            {/* Quick Navigation Bar */}
-            <div className="quick-navigation-bar">
-              <div className="nav-actions-horizontal">
-                <button 
-                  className="nav-btn applications"
-                  onClick={() => handleRouteChange('applications')}
-                  title="Manage Applications"
-                >
-                  <Server size={18} />
-                  <span>Applications</span>
-                </button>
-                <button 
-                  className="nav-btn monitoring"
-                  onClick={() => handleRouteChange('traces')}
-                  title="View Monitoring Tools"
-                >
-                  <Activity size={18} />
-                  <span>Monitor</span>
-                </button>
-                <button 
-                  className="nav-btn alerts"
-                  onClick={() => handleRouteChange('notifications')}
-                  title="View Active Alerts"
-                >
-                  <AlertTriangle size={18} />
-                  <span>Alerts</span>
-                  {(stats.errorCount + stats.warningCount > 0) && (
-                    <div className="alert-badge">
-                      {stats.errorCount + stats.warningCount}
-                    </div>
-                  )}
-                </button>
-              </div>
-            </div>
 
-            {/* Mission Control Center */}
-            <div className="mission-control-center">
-              <div className="control-panel">
-                <h3>Mission Control</h3>
-                <div className="primary-actions">
-                  <button
-                    className={`control-btn primary extra-large ${isTestRunning ? 'running' : ''}`}
-                    onClick={handleRunAllTests}
-                    disabled={isTestRunning}
-                  >
-                    <Activity size={24} />
-                    <span>{isTestRunning ? 'Running Health Checks...' : 'Run All Health Checks'}</span>
-                    {isTestRunning && <div className="loading-spinner"></div>}
-                  </button>
-                </div>
-              </div>
-
-              <div className="status-overview">
-                <h3>System Status</h3>
-                <div className="status-cards horizontal-layout">
-                  <div className="status-card healthy">
-                    <div className="status-count">{stats.healthyCount}</div>
-                    <div className="status-label">Healthy</div>
-                  </div>
-                  <div className="status-card warning">
-                    <div className="status-count">{stats.warningCount}</div>
-                    <div className="status-label">Warning</div>
-                  </div>
-                  <div className="status-card error">
-                    <div className="status-count">{stats.errorCount}</div>
-                    <div className="status-label">Critical</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="dashboard-body">
-              <div className="main-content">
-                {/* Dashboard Summary - High level overview only */}
-                <div className="dashboard-summary">
-                  <div className="summary-section">
-                    <h2>Platform Overview</h2>
-                    <p>Your centralized mission control for monitoring and managing all applications.</p>
-                    <div className="quick-stats">
-                      <div className="stat-card">
-                        <h3>{stats.totalApplications}</h3>
-                        <p>Total Applications</p>
-                      </div>
-                      <div className="stat-card">
-                        <h3>{Math.round((stats.healthyCount / stats.totalApplications) * 100)}%</h3>
-                        <p>Overall Health</p>
-                      </div>
-                      <div className="stat-card">
-                        <h3>{stats.averageResponseTime}ms</h3>
-                        <p>Avg Response Time</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Sidebar
-                testProgress={testProgress}
-                activities={activities}
-                connected={connected}
-                connecting={connecting}
-                onCancelTest={isTestRunning ? handleCancelTest : undefined}
-                onReconnect={reconnect}
-              />
-            </div>
           </>
         );
     }
   };
 
-  const isTestRunning = currentTestRun?.status === 'running';
-  const runningTestAppId = isTestRunning && currentTestRun?.applications.length === 1 
+  const runningTestAppId = currentTestRun?.status === 'running' && currentTestRun?.applications.length === 1 
     ? currentTestRun.applications[0] 
     : undefined;
 
@@ -635,12 +472,6 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      <WebSocketDemo
-        onSimulateTest={handleSimulateTest}
-        onSimulateStatusUpdate={handleSimulateStatusUpdate}
-        onSimulateActivity={handleSimulateActivity}
-        isTestRunning={isTestRunning || webSocketSimulator.isRunning()}
-      />
       
       {/* Performance Monitor - Development Only */}
       <PerformanceMonitor />

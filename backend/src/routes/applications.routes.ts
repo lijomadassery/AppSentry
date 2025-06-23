@@ -4,8 +4,11 @@ import { validate, validateQuery, validateParams } from '../middlewares/validati
 import { Environment, CreateApplicationInput, UpdateApplicationInput } from '../types';
 import { prisma } from '../database/prisma';
 import { logger } from '../utils/logger';
-import { metrics } from '@opentelemetry/api';
+import { metrics, trace } from '@opentelemetry/api';
 import Joi from 'joi';
+
+// Create a tracer for applications
+const tracer = trace.getTracer('appsentry-applications', '1.0.0');
 
 // Create a meter for custom metrics
 const meter = metrics.getMeter('appsentry-backend', '1.0.0');
@@ -27,8 +30,20 @@ const router = Router();
 
 // Get application statistics (placed first to avoid middleware conflicts)
 router.get('/stats', async (req: Request, res: Response) => {
+  const span = tracer.startSpan('get_application_stats');
+  
   try {
-    logger.info('Stats endpoint called');
+    logger.info('Application statistics requested', {
+      endpoint: '/api/applications/stats',
+      userAgent: req.headers['user-agent'],
+      clientIP: req.ip
+    });
+    
+    span.setAttributes({
+      'http.method': 'GET',
+      'http.route': '/api/applications/stats',
+      'operation.name': 'get_application_stats'
+    });
     
     // Use mock data for development when DB is not available
     const stats = {
@@ -42,16 +57,41 @@ router.get('/stats', async (req: Request, res: Response) => {
       slaCompliance: 99.5,
     };
 
-    logger.info('Returning stats', { stats });
+    logger.info('Application statistics calculated successfully', {
+      totalApps: stats.totalApplications,
+      healthyApps: stats.healthyCount,
+      overallHealth: stats.overallHealth,
+      avgResponseTime: stats.averageResponseTime,
+      traceId: span.spanContext().traceId
+    });
+
+    span.setAttributes({
+      'stats.total_applications': stats.totalApplications,
+      'stats.healthy_count': stats.healthyCount,
+      'stats.overall_health': stats.overallHealth
+    });
+
     res.json(stats);
+    span.setStatus({ code: 1 }); // OK
+    
   } catch (error) {
-    logger.error('Failed to get application statistics', { error });
+    logger.error('Failed to get application statistics', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      endpoint: '/api/applications/stats'
+    });
+    
+    span.recordException(error as Error);
+    span.setStatus({ code: 2, message: (error as Error).message });
+    
     res.status(500).json({
       error: {
         message: 'Failed to retrieve statistics',
         code: 'GET_STATS_FAILED',
       },
     });
+  } finally {
+    span.end();
   }
 });
 

@@ -6,6 +6,118 @@
   border: 1px solid var(--border-color);
 }
 
+/* Kubernetes Monitoring Cards - Using consistent overview card styling */
+.k8s-monitoring-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 0.5rem 0;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .k8s-monitoring-cards {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+}
+
+@media (min-width: 1400px) {
+  .k8s-monitoring-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Cluster Overview Cards - Using consistent overview card styling */
+.cluster-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 0.5rem 0;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .cluster-overview {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+}
+
+@media (min-width: 1400px) {
+  .cluster-overview {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Cluster Warnings Section - Using consistent overview card styling */
+.cluster-warnings-section {
+  margin-bottom: 2rem;
+}
+
+.cluster-warnings-section h4 {
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.warnings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+  .warnings-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+}
+
+@media (min-width: 1400px) {
+  .warnings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+/* Event time styling within warning cards */
+.event-time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* View details link styling */
+.view-details-link {
+  color: var(--accent-blue);
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+
+.view-details-link:hover {
+  color: #ffffff;
+  text-shadow: 0 0 8px var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+}
+
+[data-theme="dark"] .event-time {
+  color: var(--text-secondary);
+  border-top-color: rgba(255, 255, 255, 0.05);
+}
+
+
 .platform-metrics.loading {
   display: flex;
   flex-direction: column;

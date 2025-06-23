@@ -34,14 +34,24 @@ interface MetricChart {
   color?: string;
 }
 
+interface Application {
+  id: string;
+  name: string;
+  service_name: string;
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  last_seen: string;
+}
+
 const MetricsPage: React.FC = () => {
   const [selectedTimeRange, setSelectedTimeRange] = useState('1h');
   const [selectedService, setSelectedService] = useState('all');
+  const [selectedApplication, setSelectedApplication] = useState('all');
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<MetricChart[]>([]);
   const [summaryMetrics, setSummaryMetrics] = useState<MetricSummary[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
 
   // Generate mock time-series data
   const generateTimeSeriesData = (points: number = 20): MetricData[] => {
@@ -71,6 +81,7 @@ const MetricsPage: React.FC = () => {
       const queryParams = new URLSearchParams({
         timeRange: selectedTimeRange,
         ...(selectedService !== 'all' && { serviceName: selectedService }),
+        ...(selectedApplication !== 'all' && { applicationName: selectedApplication }),
         limit: '1000'
       });
 
@@ -145,6 +156,11 @@ const MetricsPage: React.FC = () => {
     }
   };
 
+  // Load applications for filtering
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
   // Auto-refresh effect
   useEffect(() => {
     loadMetrics();
@@ -153,7 +169,24 @@ const MetricsPage: React.FC = () => {
       const interval = setInterval(loadMetrics, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [selectedTimeRange, selectedService, refreshInterval, autoRefresh]);
+  }, [selectedTimeRange, selectedService, selectedApplication, refreshInterval, autoRefresh]);
+
+  const loadApplications = async () => {
+    try {
+      const response = await fetch('/api/applications');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setApplications(data.applications || []);
+      } else {
+        console.error('Failed to fetch applications:', data.error);
+        setApplications([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+      setApplications([]);
+    }
+  };
 
   // Format number with units
   const formatValue = (value: number, unit: string): string => {
@@ -279,6 +312,19 @@ const MetricsPage: React.FC = () => {
       <div className="metrics-header">
         <h1>Metrics Dashboard</h1>
         <div className="metrics-controls">
+          <select 
+            value={selectedApplication} 
+            onChange={(e) => setSelectedApplication(e.target.value)}
+            className="application-select"
+          >
+            <option value="all">All Applications</option>
+            {applications.map((app) => (
+              <option key={app.id} value={app.name}>
+                {app.name}
+              </option>
+            ))}
+          </select>
+
           <select 
             value={selectedService} 
             onChange={(e) => setSelectedService(e.target.value)}

@@ -4,15 +4,30 @@ import { clickHouseService, TraceData, MetricData, LogData } from '../services/c
 
 const router = Router();
 
-// OTEL Traces endpoint
+// OTEL Traces endpoint (DEPRECATED - Use Kafka ingestion service)
 router.post('/v1/traces', async (req: Request, res: Response) => {
+  // Log deprecation warning
+  logger.warn('Direct OTEL traces endpoint is deprecated - use Kafka ingestion service', {
+    operation: 'deprecated_endpoint',
+    endpoint: '/v1/traces',
+    source_ip: req.ip,
+    user_agent: req.get('User-Agent')
+  });
+
   try {
     const traces = req.body;
     
     // Log received traces for debugging
+    const traceCount = traces?.resourceSpans?.reduce((total: number, rs: any) => 
+      total + (rs?.scopeSpans?.reduce((scopeTotal: number, ss: any) => 
+        scopeTotal + (ss?.spans?.length || 0), 0) || 0), 0) || 0;
+    
     logger.info('Received OTEL traces', {
-      count: traces?.resourceSpans?.length || 0,
-      timestamp: new Date().toISOString(),
+      operation: 'otel_ingestion',
+      data_type: 'traces',
+      resource_spans: traces?.resourceSpans?.length || 0,
+      total_spans: traceCount,
+      source: 'otel_collector'
     });
 
     // Transform and store traces in ClickHouse
@@ -92,9 +107,25 @@ router.post('/v1/traces', async (req: Request, res: Response) => {
       });
     }
 
-    // Insert traces into ClickHouse
+    // Insert traces into ClickHouse (only if direct ingestion is enabled)
     if (traceData.length > 0) {
-      await clickHouseService.insertTraces(traceData);
+      const enableDirectIngestion = process.env.ENABLE_DIRECT_OTEL_INGESTION === 'true';
+      
+      if (enableDirectIngestion) {
+        await clickHouseService.insertTraces(traceData);
+        logger.info('Stored OTEL traces in ClickHouse via direct ingestion', {
+          operation: 'otel_storage',
+          data_type: 'traces',
+          stored_count: traceData.length
+        });
+      } else {
+        logger.info('Skipped direct OTEL traces storage - using Kafka ingestion instead', {
+          operation: 'otel_skip',
+          data_type: 'traces',
+          received_count: traceData.length,
+          reason: 'direct_ingestion_disabled'
+        });
+      }
     }
 
     res.status(200).json({ success: true });
@@ -104,14 +135,29 @@ router.post('/v1/traces', async (req: Request, res: Response) => {
   }
 });
 
-// OTEL Metrics endpoint  
+// OTEL Metrics endpoint (DEPRECATED - Use Kafka ingestion service)
 router.post('/v1/metrics', async (req: Request, res: Response) => {
+  // Log deprecation warning
+  logger.warn('Direct OTEL metrics endpoint is deprecated - use Kafka ingestion service', {
+    operation: 'deprecated_endpoint',
+    endpoint: '/v1/metrics',
+    source_ip: req.ip,
+    user_agent: req.get('User-Agent')
+  });
+
   try {
     const metrics = req.body;
     
+    const metricCount = metrics?.resourceMetrics?.reduce((total: number, rm: any) => 
+      total + (rm?.scopeMetrics?.reduce((scopeTotal: number, sm: any) => 
+        scopeTotal + (sm?.metrics?.length || 0), 0) || 0), 0) || 0;
+    
     logger.info('Received OTEL metrics', {
-      count: metrics?.resourceMetrics?.length || 0,
-      timestamp: new Date().toISOString(),
+      operation: 'otel_ingestion',
+      data_type: 'metrics',
+      resource_metrics: metrics?.resourceMetrics?.length || 0,
+      total_metrics: metricCount,
+      source: 'otel_collector'
     });
 
     // Transform and store metrics in ClickHouse with correct schema
@@ -228,9 +274,25 @@ router.post('/v1/metrics', async (req: Request, res: Response) => {
       });
     }
 
-    // Insert metrics into ClickHouse
+    // Insert metrics into ClickHouse (only if direct ingestion is enabled)
     if (metricData.length > 0) {
-      await clickHouseService.insertMetrics(metricData);
+      const enableDirectIngestion = process.env.ENABLE_DIRECT_OTEL_INGESTION === 'true';
+      
+      if (enableDirectIngestion) {
+        await clickHouseService.insertMetrics(metricData);
+        logger.info('Stored OTEL metrics in ClickHouse via direct ingestion', {
+          operation: 'otel_storage',
+          data_type: 'metrics',
+          stored_count: metricData.length
+        });
+      } else {
+        logger.info('Skipped direct OTEL metrics storage - using Kafka ingestion instead', {
+          operation: 'otel_skip',
+          data_type: 'metrics',
+          received_count: metricData.length,
+          reason: 'direct_ingestion_disabled'
+        });
+      }
     }
 
     res.status(200).json({ success: true });
@@ -240,14 +302,29 @@ router.post('/v1/metrics', async (req: Request, res: Response) => {
   }
 });
 
-// OTEL Logs endpoint
+// OTEL Logs endpoint (DEPRECATED - Use Kafka ingestion service)
 router.post('/v1/logs', async (req: Request, res: Response) => {
+  // Log deprecation warning
+  logger.warn('Direct OTEL logs endpoint is deprecated - use Kafka ingestion service', {
+    operation: 'deprecated_endpoint',
+    endpoint: '/v1/logs',
+    source_ip: req.ip,
+    user_agent: req.get('User-Agent')
+  });
+
   try {
     const logs = req.body;
     
+    const logCount = logs?.resourceLogs?.reduce((total: number, rl: any) => 
+      total + (rl?.scopeLogs?.reduce((scopeTotal: number, sl: any) => 
+        scopeTotal + (sl?.logRecords?.length || 0), 0) || 0), 0) || 0;
+    
     logger.info('Received OTEL logs', {
-      count: logs?.resourceLogs?.length || 0,
-      timestamp: new Date().toISOString(),
+      operation: 'otel_ingestion',
+      data_type: 'logs',
+      resource_logs: logs?.resourceLogs?.length || 0,
+      total_log_records: logCount,
+      source: 'otel_collector'
     });
 
     // Transform and store logs in ClickHouse
@@ -305,9 +382,25 @@ router.post('/v1/logs', async (req: Request, res: Response) => {
       });
     }
 
-    // Insert logs into ClickHouse
+    // Insert logs into ClickHouse (only if direct ingestion is enabled)
     if (logData.length > 0) {
-      await clickHouseService.insertLogs(logData);
+      const enableDirectIngestion = process.env.ENABLE_DIRECT_OTEL_INGESTION === 'true';
+      
+      if (enableDirectIngestion) {
+        await clickHouseService.insertLogs(logData);
+        logger.info('Stored OTEL logs in ClickHouse via direct ingestion', {
+          operation: 'otel_storage',
+          data_type: 'logs',
+          stored_count: logData.length
+        });
+      } else {
+        logger.info('Skipped direct OTEL logs storage - using Kafka ingestion instead', {
+          operation: 'otel_skip',
+          data_type: 'logs',
+          received_count: logData.length,
+          reason: 'direct_ingestion_disabled'
+        });
+      }
     }
 
     res.status(200).json({ success: true });
@@ -320,11 +413,25 @@ router.post('/v1/logs', async (req: Request, res: Response) => {
 // Get traces
 router.get('/traces', async (req: Request, res: Response) => {
   try {
-    const { timeRange, serviceName, operationName, limit } = req.query;
+    const { timeRange, serviceName, operationName, applicationName, limit } = req.query;
+    
+    // If applicationName is provided, get the service name for that application
+    let targetServiceName = serviceName as string;
+    if (applicationName && applicationName !== 'all') {
+      try {
+        const applications = await clickHouseService.getApplications();
+        const app = applications.find((a: any) => a.name === applicationName);
+        if (app) {
+          targetServiceName = app.service_name;
+        }
+      } catch (error) {
+        logger.warn('Failed to fetch applications for filtering', { error });
+      }
+    }
     
     const traces = await clickHouseService.getTraces({
       timeRange: timeRange as string,
-      serviceName: serviceName as string,
+      serviceName: targetServiceName,
       operationName: operationName as string,
       limit: limit ? parseInt(limit as string) : undefined,
     });
@@ -352,11 +459,25 @@ router.get('/traces/:traceId', async (req: Request, res: Response) => {
 // Get metrics
 router.get('/metrics', async (req: Request, res: Response) => {
   try {
-    const { timeRange, serviceName, metricName, limit } = req.query;
+    const { timeRange, serviceName, metricName, applicationName, limit } = req.query;
+    
+    // If applicationName is provided, get the service name for that application
+    let targetServiceName = serviceName as string;
+    if (applicationName && applicationName !== 'all') {
+      try {
+        const applications = await clickHouseService.getApplications();
+        const app = applications.find((a: any) => a.name === applicationName);
+        if (app) {
+          targetServiceName = app.service_name;
+        }
+      } catch (error) {
+        logger.warn('Failed to fetch applications for filtering', { error });
+      }
+    }
     
     const metrics = await clickHouseService.getMetrics({
       timeRange: timeRange as string,
-      serviceName: serviceName as string,
+      serviceName: targetServiceName,
       metricName: metricName as string,
       limit: limit ? parseInt(limit as string) : undefined,
     });
@@ -384,11 +505,25 @@ router.get('/metrics/summary', async (req: Request, res: Response) => {
 // Get logs
 router.get('/logs', async (req: Request, res: Response) => {
   try {
-    const { timeRange, serviceName, severityLevel, searchTerm, limit } = req.query;
+    const { timeRange, serviceName, severityLevel, searchTerm, applicationName, limit } = req.query;
+    
+    // If applicationName is provided, get the service name for that application
+    let targetServiceName = serviceName as string;
+    if (applicationName && applicationName !== 'all') {
+      try {
+        const applications = await clickHouseService.getApplications();
+        const app = applications.find((a: any) => a.name === applicationName);
+        if (app) {
+          targetServiceName = app.service_name;
+        }
+      } catch (error) {
+        logger.warn('Failed to fetch applications for filtering', { error });
+      }
+    }
     
     const logs = await clickHouseService.getLogs({
       timeRange: timeRange as string,
-      serviceName: serviceName as string,
+      serviceName: targetServiceName,
       severityLevel: severityLevel as string,
       searchTerm: searchTerm as string,
       limit: limit ? parseInt(limit as string) : undefined,

@@ -16,6 +16,14 @@ interface Trace {
   errorCount: number;
 }
 
+interface Application {
+  id: string;
+  name: string;
+  service_name: string;
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  last_seen: string;
+}
+
 interface Span {
   spanId: string;
   traceId: string;
@@ -43,11 +51,35 @@ const TracesPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('24h');
   const [serviceFilter, setServiceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [applicationFilter, setApplicationFilter] = useState('');
+  const [applications, setApplications] = useState<Application[]>([]);
+
+  // Load applications for filtering
+  useEffect(() => {
+    loadApplications();
+  }, []);
 
   // Load real traces from backend
   useEffect(() => {
     loadTraces();
-  }, [timeRange, serviceFilter, statusFilter]);
+  }, [timeRange, serviceFilter, statusFilter, applicationFilter]);
+
+  const loadApplications = async () => {
+    try {
+      const response = await fetch('/api/applications');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setApplications(data.applications || []);
+      } else {
+        console.error('Failed to fetch applications:', data.error);
+        setApplications([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+      setApplications([]);
+    }
+  };
 
   const loadTraces = async () => {
     setLoading(true);
@@ -56,6 +88,7 @@ const TracesPage: React.FC = () => {
       const queryParams = new URLSearchParams({
         timeRange,
         ...(serviceFilter && { serviceName: serviceFilter }),
+        ...(applicationFilter && { applicationName: applicationFilter }),
         limit: '100'
       });
 
@@ -206,6 +239,19 @@ const TracesPage: React.FC = () => {
             <option value="6h">Last 6 hours</option>
             <option value="24h">Last 24 hours</option>
             <option value="7d">Last 7 days</option>
+          </select>
+
+          <select 
+            value={applicationFilter} 
+            onChange={(e) => setApplicationFilter(e.target.value)}
+            className="application-filter"
+          >
+            <option value="">All Applications</option>
+            {applications.map((app) => (
+              <option key={app.id} value={app.name}>
+                {app.name}
+              </option>
+            ))}
           </select>
 
           <select 

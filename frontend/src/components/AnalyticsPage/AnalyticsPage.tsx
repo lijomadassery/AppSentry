@@ -476,7 +476,7 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
         </h2>
         
         <div className="app-performance-grid">
-          {applications.slice(0, 6).map((app, index) => (
+          {(Array.isArray(applications) ? applications : []).slice(0, 6).map((app, index) => (
             <div key={app.id} className="app-performance-card">
               <div className="app-header">
                 <div className="app-icon">

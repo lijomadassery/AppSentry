@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: appsentry-ingestion
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion-service
+  namespace: appsentry-ingestion
+  labels:
+    app: ingestion-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingestion-service
+  template:
+    metadata:
+      labels:
+        app: ingestion-service
+    spec:
+      containers:
+      - name: ingestion-service
+        image: docker.io/appsentry/ingestion-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: metrics
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka.appsentry-kafka.svc.cluster.local:9092"
+        - name: CLICKHOUSE_ADDR
+          value: "clickhouse.appsentry-otel.svc.cluster.local:9000"
+        - name: CONSUMER_GROUP
+          value: "appsentry-ingestion"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestion-service
+  namespace: appsentry-ingestion
+  labels:
+    app: ingestion-service
+spec:
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: ingestion-service
+  type: ClusterIP
+---
+# NodePort service for external metrics access
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestion-service-external
+  namespace: appsentry-ingestion
+  labels:
+    app: ingestion-service
+spec:
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    nodePort: 30080
+    protocol: TCP
+  selector:
+    app: ingestion-service
+  type: NodePort
