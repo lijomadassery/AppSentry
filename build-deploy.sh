@@ -38,9 +38,9 @@ if [ "$LOCAL_BUILD" = "true" ]; then
     FRONTEND_IMAGE="appsentry/frontend"
     INGESTION_IMAGE="appsentry/ingestion-service"
 else
-    BACKEND_IMAGE="docker.io/appsentry/backend"
-    FRONTEND_IMAGE="docker.io/appsentry/frontend"
-    INGESTION_IMAGE="docker.io/appsentry/ingestion-service"
+    BACKEND_IMAGE="docker.io/lijomadassery/appsentry-backend"
+    FRONTEND_IMAGE="docker.io/lijomadassery/appsentry-frontend"
+    INGESTION_IMAGE="docker.io/lijomadassery/appsentry-ingestion-service"
 fi
 
 echo "🚀 Starting AppSentry Build and Deploy Process"

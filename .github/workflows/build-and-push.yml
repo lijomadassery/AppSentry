@@ -9,7 +9,6 @@ on:
 
 env:
   DOCKER_REGISTRY: docker.io
-  DOCKER_NAMESPACE: appsentry
 
 jobs:
   build-backend:
@@ -32,7 +31,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/backend
+        images: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -72,7 +71,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/frontend
+        images: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -112,7 +111,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/ingestion-service
+        images: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-ingestion-service
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -148,13 +147,13 @@ jobs:
         SHORT_SHA=${GITHUB_SHA::7}
         
         # Update backend image tag
-        sed -i "s|image: appsentry/backend:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/backend:${GITHUB_REF_NAME}|g" k8s/appsentry-backend.yaml
+        sed -i "s|image: docker.io/.*/appsentry-backend:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend:${GITHUB_REF_NAME}|g" k8s/appsentry-backend.yaml
         
         # Update frontend image tag
-        sed -i "s|image: appsentry/frontend:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/frontend:${GITHUB_REF_NAME}|g" k8s/appsentry-frontend.yaml
+        sed -i "s|image: docker.io/.*/appsentry-frontend:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend:${GITHUB_REF_NAME}|g" k8s/appsentry-frontend.yaml
         
         # Update ingestion service image tag
-        sed -i "s|image: appsentry/ingestion-worker:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/ingestion-service:${GITHUB_REF_NAME}|g" k8s/ingestion-service.yaml
+        sed -i "s|image: docker.io/.*/appsentry-ingestion-service:.*|image: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-ingestion-service:${GITHUB_REF_NAME}|g" k8s/ingestion-service.yaml
 
     - name: Commit and push changes
       run: |
@@ -173,7 +172,7 @@ jobs:
     - name: Run Trivy vulnerability scanner (Backend)
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/backend:${{ github.ref_name }}
+        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend:${{ github.ref_name }}
         format: 'sarif'
         output: 'backend-trivy-results.sarif'
 
@@ -186,7 +185,7 @@ jobs:
     - name: Run Trivy vulnerability scanner (Frontend)
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/frontend:${{ github.ref_name }}
+        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend:${{ github.ref_name }}
         format: 'sarif'
         output: 'frontend-trivy-results.sarif'
 
