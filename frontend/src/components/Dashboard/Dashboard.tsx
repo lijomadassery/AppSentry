@@ -26,6 +26,7 @@ import { PlatformMetrics } from '../PlatformMetrics/PlatformMetrics';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { webSocketSimulator } from '../../services/websocketSimulator';
 import { testApi } from '../../services/api';
 import { Application, User, TestRun } from '../../types';
@@ -34,15 +35,10 @@ import './Dashboard.css';
 
 const WEBSOCKET_URL = process.env.REACT_APP_WS_URL || 'http://localhost:3001';
 
-// Mock user data - in real app this would come from auth context
-const mockUser: User = {
-  id: '1',
-  displayName: 'John Doe',
-  email: 'john.doe@company.com',
-  role: 'admin',
-};
-
 export const Dashboard: React.FC = () => {
+  // Get auth state
+  const { user, logout } = useAuth();
+  
   // Get state and actions from AppContext
   const { 
     state, 
@@ -434,9 +430,10 @@ export const Dashboard: React.FC = () => {
       <div className={`dashboard-main ${isNavCollapsed ? 'nav-collapsed' : 'nav-expanded'}`}>
         {/* Header with hamburger menu for mobile */}
         <Header
-          user={mockUser}
+          user={user!}
           onToggleMobileMenu={handleToggleMobileMenu}
           isMobileMenuOpen={isMobileMenuOpen}
+          onLogout={logout}
         />
 
         {/* Dashboard Content */}
