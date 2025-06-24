@@ -97,7 +97,7 @@ export const config = {
   },
   
   // Legacy configurations (optional, for backwards compatibility)
-  database: {
+  legacyDatabase: {
     host: envVars.MYSQL_HOST || 'localhost',
     port: envVars.MYSQL_PORT || 3306,
     database: envVars.MYSQL_DATABASE || 'appsentry_dev',
