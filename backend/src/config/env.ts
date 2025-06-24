@@ -36,6 +36,11 @@ const envSchema = Joi.object({
   // Optional legacy fields (for backwards compatibility)  
   REDIS_URL: Joi.string().optional(),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
+  
+  // Testing configuration
+  PLAYWRIGHT_HEADLESS: Joi.boolean().optional(),
+  PARALLEL_TEST_LIMIT: Joi.number().optional(),
+  TEST_TIMEOUT: Joi.number().optional(),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
@@ -83,5 +88,12 @@ export const config = {
   redis: {
     url: envVars.REDIS_URL || 'redis://localhost:6379',
     password: envVars.REDIS_PASSWORD || '',
+  },
+  
+  // Testing configuration
+  testing: {
+    playwrightHeadless: envVars.PLAYWRIGHT_HEADLESS ?? true,
+    parallelTestLimit: envVars.PARALLEL_TEST_LIMIT || 5,
+    testTimeout: envVars.TEST_TIMEOUT || 30000,
   },
 };
