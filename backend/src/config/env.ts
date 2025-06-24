@@ -12,6 +12,9 @@ const envSchema = Joi.object({
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
   CORS_ORIGIN: Joi.string().required(),
 
+  // Database (MySQL)
+  DATABASE_URL: Joi.string().required(),
+
   // ClickHouse (for observability platform)
   CLICKHOUSE_HOST: Joi.string().default('localhost'),
   CLICKHOUSE_PORT: Joi.number().default(8123),
@@ -63,6 +66,11 @@ export const config = {
   port: envVars.PORT,
   logLevel: envVars.LOG_LEVEL,
   corsOrigin: envVars.CORS_ORIGIN,
+  
+  // Database configuration
+  database: {
+    url: envVars.DATABASE_URL,
+  },
   
   // ClickHouse configuration for observability platform
   clickhouse: {

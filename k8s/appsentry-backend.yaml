@@ -56,6 +56,10 @@ spec:
         - name: LOG_LEVEL
           value: "info"
         
+        # Database Configuration
+        - name: DATABASE_URL
+          value: "mysql://appsentry:appsentry456@mysql.appsentry.svc.cluster.local:3306/appsentry"
+        
         # ClickHouse Configuration
         - name: CLICKHOUSE_HOST
           value: "clickhouse.appsentry-otel.svc.cluster.local"

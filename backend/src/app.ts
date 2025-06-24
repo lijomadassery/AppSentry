@@ -193,8 +193,8 @@ export class App {
 
   public async initialize(): Promise<void> {
     try {
-      // await database.connect(); // TEMPORARILY DISABLED
-      logger.info('Database initialization skipped temporarily');
+      await database.connect();
+      logger.info('Database connected successfully');
       
       // Start health check scheduler
       setTimeout(async () => {

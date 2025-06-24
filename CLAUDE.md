@@ -6,12 +6,14 @@ AppSentry is a comprehensive observability platform that evolved from an applica
 ## Current Architecture
 
 ### Tech Stack
-- **Frontend**: React with TypeScript, Glassmorphism design
-- **Backend**: Node.js, Express.js with TypeScript  
-- **Databases**: ClickHouse (primary), Redis (cache/sessions), VictoriaMetrics (planned)
-- **Observability**: OpenTelemetry SDK with OTLP exporters
-- **Container**: Docker, Kubernetes deployment ready
-- **Development**: Minikube for local development
+- **Frontend**: React with TypeScript, Glassmorphism design with modern authentication UI
+- **Backend**: Node.js, Express.js with TypeScript and JWT authentication
+- **Authentication**: JWT-based with bcrypt password hashing, local user management
+- **Databases**: ClickHouse (primary), local file storage for artifacts
+- **Observability**: OpenTelemetry SDK with OTLP exporters, Kafka message queue
+- **Container**: Docker multi-platform builds, Kubernetes deployment
+- **Development**: Minikube with full production-like deployment
+- **CI/CD**: GitHub Actions with DockerHub registry (lijomadassery namespace)
 
 ### Database Schema (ClickHouse)
 - **Existing OTEL Tables**: `otel.traces`, `otel.metrics_sum`, `otel.metrics_gauge`, `otel.logs`
@@ -22,6 +24,12 @@ AppSentry is a comprehensive observability platform that evolved from an applica
 - **Metrics**: 2M+ metric data points
 - **Logs**: 32K+ log entries
 
+### Authentication System
+- **Default Users**: admin/admin123 (admin), viewer/viewer123 (viewer), lijo/lijo2025 (admin)
+- **Security**: JWT tokens with automatic refresh, bcrypt password hashing
+- **UI**: Modern glassmorphism login page with responsive design
+- **Session Management**: Protected routes with automatic login redirect
+
 ## Project Evolution
 
 ### Original Intent
@@ -31,9 +39,11 @@ AppSentry is a comprehensive observability platform that evolved from an applica
 
 ### Current Reality
 - Full observability platform with OTEL integration
+- Enterprise-grade ingestion layer with Kafka buffering
 - Real-time traces, metrics, and logs collection
+- Complete JWT authentication system with modern UI
 - Service discovery and health monitoring
-- Mixed navigation between app-centric and platform-centric features
+- Production-ready containerized deployment
 
 ## Architecture Decisions
 
@@ -70,12 +80,16 @@ Platform
 - **Real-time Updates**: 15-30 second refresh cycle (near real-time)
 - **Error Handling**: Show degraded status, fail gracefully with cached data
 
-### Role-Based Access Control (Planned)
-- **Super Admin**: Full access
-- **Platform Admin**: Full platform access
-- **Team Lead**: Team apps + limited platform
-- **Developer**: Own apps + read-only platform
-- **Viewer**: Read-only specific apps
+### Role-Based Access Control (Implemented)
+- **Admin**: Full platform access (admin, lijo users)
+- **Editor**: Application management + platform monitoring
+- **Viewer**: Read-only access to assigned applications (viewer user)
+
+### Ingestion Architecture
+- **Phase 1**: Enterprise ingestion layer with Kafka message queue
+- **Go Service**: High-performance ingestion service consuming from Kafka
+- **OTEL Collector**: Configured for Kafka export with batching
+- **ClickHouse**: Optimized time-series storage with real production data
 
 ## Development Environment
 
@@ -83,70 +97,82 @@ Platform
 - **Backend**: Port 3001 (`npm run dev:backend`)
 - **Frontend**: Port 3000 (`npm run dev:frontend`)
 - **ClickHouse**: Port 8123 (HTTP), 9000 (Native)
-- **Development**: Minikube with ClickHouse deployed
-- **OTEL Collector**: Kubernetes deployment collecting real telemetry
+- **Kafka/Redpanda**: Port 9092 (Kafka protocol)
+- **Ingestion Service**: Port 8080 (metrics endpoint)
+- **Development**: Full Minikube deployment with production-like architecture
+- **OTEL Collector**: Kubernetes deployment with Kafka export
 
 ### Environment Configuration
 - Root `.env` file with all configuration
 - Backend loads environment from project root
-- Simplified Joi validation focused on observability needs
+- JWT authentication configuration (required)
 - ClickHouse and OpenTelemetry configs as primary
+- Local file storage for artifacts (no cloud dependencies)
 
 ### Project Structure
 ```
 backend/
 ├── src/
-│   ├── routes/ (API routes including OTLP endpoints)
-│   ├── services/ (ClickHouse service and telemetry processing)
-│   ├── config/ (Environment configuration)
+│   ├── routes/ (API routes including OTLP and auth endpoints)
+│   ├── services/ (ClickHouse, auth, and telemetry processing)
+│   ├── config/ (JWT and environment configuration)
 │   └── otel.ts (OpenTelemetry initialization)
 
 frontend/
 ├── src/
-│   ├── components/ (React components with glassmorphism design)
-│   ├── services/ (API client for telemetry data)
-│   └── pages/ (Dashboard pages)
+│   ├── components/ (React components with modern auth UI)
+│   ├── contexts/ (Authentication and app state management)
+│   ├── services/ (API client with JWT token management)
+│   └── pages/ (Protected dashboard pages)
+
+ingestion-service/ (Go-based high-performance ingestion)
+├── cmd/ (Main application entry)
+├── internal/ (Core business logic)
+└── pkg/ (Shared packages)
 
 k8s/ (Kubernetes manifests)
 ├── clickhouse/ (ClickHouse deployment)
-└── otel/ (OpenTelemetry Collector)
+├── otel/ (OpenTelemetry Collector with Kafka)
+├── kafka/ (Redpanda/Kafka message queue)
+└── appsentry-*.yaml (Application deployments)
 ```
 
 ## Recent Accomplishments
 
 ### ✅ Completed Features
-- OpenTelemetry SDK integration with trace, metric, and log exporters
-- ClickHouse service with optimized schemas for OTEL data
-- OTLP HTTP endpoints for telemetry ingestion
-- React dashboard with glassmorphism design
-- Real-time telemetry data visualization
-- Service name cleanup and auto-detection
-- Kubernetes deployment manifests
-- Project structure reorganization (backend/ and frontend/ folders)
-- Browser tab branding updated to "AppSentry" with custom favicon
-- Environment configuration fixes for development workflow
+- **Authentication System**: Complete JWT-based auth with modern UI
+- **Enterprise Ingestion**: Kafka message queue with Go-based ingestion service
+- **OpenTelemetry Integration**: Full OTEL SDK with trace, metric, and log exporters
+- **ClickHouse Service**: Optimized schemas for high-volume OTEL data
+- **React Dashboard**: Glassmorphism design with protected routes
+- **Real-time Visualization**: Live telemetry data with automatic refresh
+- **Container Deployment**: Docker multi-platform builds with GitHub Actions
+- **Kubernetes Ready**: Production manifests with service discovery
+- **CI/CD Pipeline**: Automated builds pushing to DockerHub registry
+- **Security**: Bcrypt password hashing, JWT tokens, protected API endpoints
 
 ### 🔧 Current State
-- Both frontend and backend running successfully
-- All telemetry collection working (traces, metrics, logs)
-- ClickHouse containing real production-like data
-- Ready for application management feature development
+- Complete authentication system with modern login UI
+- Enterprise ingestion layer processing real telemetry data
+- Full containerized deployment ready for production
+- GitHub Actions CI/CD building and pushing images
+- All services running in Minikube with production-like architecture
 
 ## Development Phase Plan
 
-### Phase 1: Core Reorganization (Current Focus)
-**Goal**: Reorganize UI and add basic application management
-**Timeline**: Week 1
+### Phase 1: Enterprise Ingestion Layer (✅ COMPLETED)
+**Goal**: Build production-ready ingestion architecture
+**Status**: Successfully implemented and deployed
 
-**Tasks**:
-1. Add health endpoints to frontend/backend services
-2. Create ClickHouse application registry tables
-3. Reorganize frontend navigation structure
-4. Create new Dashboard layout (mission control)
-5. Move existing OTEL features to Monitor section
-6. Create basic Applications management page
-7. Implement application CRUD functionality
-8. Add K8s API integration for platform metrics
+**Completed Tasks**:
+1. ✅ Kafka/Redpanda message queue deployment
+2. ✅ Go-based high-performance ingestion service
+3. ✅ OTEL Collector with Kafka export configuration
+4. ✅ Complete JWT authentication system with modern UI
+5. ✅ Docker containerization and CI/CD pipeline
+6. ✅ Production-ready Kubernetes manifests
+7. ✅ E2E testing and validation framework
+8. ✅ Real telemetry data processing and storage
 
 ### Phase 2: Application Health (Planned)
 **Goal**: Implement health monitoring and SLA tracking
@@ -178,9 +204,12 @@ k8s/ (Kubernetes manifests)
 - **Future**: Migrate to Zustand/Redux as complexity grows
 
 ### API Structure
-- `/api/otel/*` - Existing observability endpoints
-- `/api/applications/*` - New application management
-- `/api/platform/*` - New platform health endpoints
+- `/api/auth/*` - JWT authentication endpoints (login, logout, refresh)
+- `/api/otel/*` - OpenTelemetry data ingestion endpoints
+- `/api/telemetry/*` - Telemetry data retrieval and queries
+- `/api/applications/*` - Application management and registry
+- `/api/platform/*` - Platform health and Kubernetes metrics
+- `/api/health-checks/*` - Application health monitoring
 
 ### Health Check Format
 ```json
@@ -192,9 +221,11 @@ k8s/ (Kubernetes manifests)
 ```
 
 ### Database Strategy
-- **Phase 1**: ClickHouse for everything (OTEL + applications)
+- **Primary**: ClickHouse for time-series telemetry data (OTEL + applications)
+- **Storage**: Local file system for artifacts and test results
+- **Authentication**: In-memory user store with JWT tokens
+- **Caching**: Built-in application state management
 - **Future**: Consider VictoriaMetrics for metrics optimization
-- **Migrations**: Let Prisma handle schema changes
 
 ## Key Metrics & SLAs
 
@@ -217,8 +248,10 @@ k8s/ (Kubernetes manifests)
 - **Health Probes**: Integrate with K8s liveness/readiness probes
 
 ### OTEL Integration
-- **Endpoint**: `http://localhost:3001/api/otel`
-- **Service Name**: Clean service name display
+- **Ingestion**: `http://localhost:3001/api/otel` (OTLP HTTP)
+- **Pipeline**: OTEL Collector → Kafka → Go Ingestion Service → ClickHouse
+- **Batching**: Configurable batch sizes for optimal performance
+- **Service Discovery**: Clean service name display and auto-detection
 - **Data Correlation**: Link health checks with traces/logs
 - **Real-time Processing**: 15-30 second data freshness
 
@@ -267,16 +300,26 @@ k8s/ (Kubernetes manifests)
 - **React**: Frontend framework with TypeScript
 
 ### Internal APIs
+- **Authentication Service**: `/backend/src/services/authService.ts`
 - **ClickHouse Service**: `/backend/src/services/clickhouseService.ts`
 - **OTEL Routes**: `/backend/src/routes/otel.routes.ts`
+- **Auth Routes**: `/backend/src/routes/auth.routes.ts`
 - **Frontend API Client**: `/frontend/src/services/api.ts`
+- **Auth Context**: `/frontend/src/contexts/AuthContext.tsx`
 
 ### Configuration Files
 - **Environment**: `/.env` (root level)
 - **Backend Config**: `/backend/src/config/env.ts`
-- **Docker**: `/docker-compose.yml`
 - **Kubernetes**: `/k8s/` directory
+- **CI/CD**: `/.github/workflows/build-and-push.yml`
+- **Build Script**: `/build-deploy.sh`
 
-Last Updated: 2025-06-21
-Current Phase: Phase 1 - Core Reorganization
-Status: Ready for implementation
+### Deployment
+- **Docker Registry**: `docker.io/lijomadassery/appsentry-*`
+- **Build**: GitHub Actions with multi-platform support
+- **Deploy**: Kubernetes manifests for Minikube/production
+- **Test**: E2E validation script (`test-e2e-flow.sh`)
+
+Last Updated: 2025-06-24
+Current Phase: Phase 1 Complete - Enterprise Ingestion Layer ✅
+Status: Production-ready authentication and ingestion system deployed

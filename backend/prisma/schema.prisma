@@ -75,16 +75,18 @@ enum ConfigType {
 }
 
 model User {
-  id          String    @id @db.VarChar(36) // Azure AD object ID
-  email       String    @unique @db.VarChar(255)
-  displayName String    @map("display_name") @db.VarChar(255)
-  firstName   String?   @map("first_name") @db.VarChar(100)
-  lastName    String?   @map("last_name") @db.VarChar(100)
-  role        UserRole  @default(viewer)
-  isActive    Boolean   @default(true) @map("is_active")
-  lastLogin   DateTime? @map("last_login")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(cuid()) @db.VarChar(36)
+  username     String    @unique @db.VarChar(100)
+  email        String    @unique @db.VarChar(255)
+  displayName  String    @map("display_name") @db.VarChar(255)
+  firstName    String?   @map("first_name") @db.VarChar(100)
+  lastName     String?   @map("last_name") @db.VarChar(100)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         UserRole  @default(viewer)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   // Relations
   testRuns                 TestRun[]                @relation("TestRunTriggeredBy")
