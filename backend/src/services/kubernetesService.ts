@@ -1,4 +1,3 @@
-import { KubeConfig, CoreV1Api, AppsV1Api, MetricsV1beta1Api } from '@kubernetes/client-node';
 import { logger } from '../utils/logger';
 
 interface NodeMetrics {
@@ -18,833 +17,320 @@ interface NodeMetrics {
 }
 
 interface PodMetrics {
-  namespace: string;
   name: string;
-  status: string;
+  namespace: string;
+  cpu: string;
+  memory: string;
   restarts: number;
-  cpu?: string;
-  memory?: string;
+  status: string;
+  ready: boolean;
   node: string;
-  cpuLimit?: string;
-  memoryLimit?: string;
-  cpuRequest?: string;
-  memoryRequest?: string;
-  creationTimestamp?: string;
-  lastRestartTime?: string;
 }
 
-interface EnhancedNodeMetrics extends NodeMetrics {
-  networkIORate: number;
-  networkErrors: number;
-  filesystemUtilization: number;
-  podCount: number;
-  containerCount: number;
-}
-
-interface WorkloadHealthData {
-  containerRestarts: {
-    total: number;
-    byPod: Array<{
-      name: string;
-      namespace: string;
-      restartCount: number;
-      lastRestartTime?: string;
-    }>;
-  };
-  unhealthyPods: {
-    total: number;
-    pods: Array<{
-      name: string;
-      namespace: string;
-      status: string;
-      reason?: string;
-      message?: string;
-      node?: string;
-    }>;
-  };
-  pendingPods: {
-    total: number;
-    pods: Array<{
-      name: string;
-      namespace: string;
-      reason?: string;
-      message?: string;
-      pendingSince?: string;
-    }>;
-  };
-  unhealthyNodes: {
-    total: number;
-    nodes: Array<{
-      name: string;
-      status: string;
-      reason?: string;
-      message?: string;
-      lastHeartbeatTime?: string;
-    }>;
-  };
-  unhealthyVolumes: {
-    total: number;
-    volumes: Array<{
-      name: string;
-      namespace: string;
-      pod: string;
-      status: string;
-      reason?: string;
-    }>;
-  };
-  failedPods: {
-    total: number;
-    pods: Array<{
-      name: string;
-      namespace: string;
-      reason?: string;
-      message?: string;
-      failedSince?: string;
-      node?: string;
-    }>;
-  };
-}
-
-interface ClusterMetrics {
-  nodes: {
-    total: number;
+interface WorkloadHealth {
+  namespace: string;
+  workload: string;
+  type: 'Deployment' | 'StatefulSet' | 'DaemonSet';
+  replicas: {
+    desired: number;
     ready: number;
-    metrics: NodeMetrics[];
-  };
-  pods: {
-    total: number;
-    running: number;
-    pending: number;
-    failed: number;
-    byNamespace: Record<string, number>;
-  };
-  deployments: {
-    total: number;
     available: number;
-    byNamespace: Record<string, number>;
   };
-  events: {
-    recent: any[];
-    warnings: any[];
-  };
+  status: 'Healthy' | 'Degraded' | 'Unhealthy';
+  conditions: any[];
 }
 
 class KubernetesService {
-  private kubeConfig: KubeConfig;
-  private coreApi: CoreV1Api;
-  private appsApi: AppsV1Api;
-  private metricsApi: MetricsV1beta1Api | null = null;
+  private kubeConfig: any;
+  private coreApi: any;
+  private appsApi: any;
+  private metricsApi: any;
   private isConnected: boolean = false;
+  private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    this.kubeConfig = new KubeConfig();
-    
-    // Try different loading methods
+    // Initialize will be called on first use
+  }
+
+  private async initialize() {
+    if (this.initialized) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.performInitialization();
+    await this.initPromise;
+  }
+
+  private async performInitialization() {
     try {
-      // First try default kubeconfig (when running locally)
-      this.kubeConfig.loadFromDefault();
-      logger.info('Loaded default Kubernetes config', {
-        currentContext: this.kubeConfig.getCurrentContext(),
-        server: this.kubeConfig.getCurrentCluster()?.server
-      });
-    } catch (error) {
-      logger.error('Failed to load default kubeconfig', { error: error.message });
+      // Dynamic import for ES module
+      const k8s = await import('@kubernetes/client-node');
+      
+      this.kubeConfig = new k8s.KubeConfig();
+      
+      // Try in-cluster config first (when running inside Kubernetes)
       try {
-        // Then try in-cluster config (when running inside K8s)
         this.kubeConfig.loadFromCluster();
-        logger.info('Loaded in-cluster Kubernetes config');
-      } catch (error2) {
-        logger.warn('Failed to load Kubernetes config, K8s features will be disabled', {
-          defaultError: error.message,
-          inClusterError: error2.message
-        });
+        logger.info('Loaded in-cluster Kubernetes configuration');
+      } catch (error) {
+        // Fall back to default kubeconfig (for local development)
+        this.kubeConfig.loadFromDefault();
+        logger.info('Loaded default Kubernetes configuration');
       }
-    }
-    
-    // Initialize API clients
-    this.coreApi = this.kubeConfig.makeApiClient(CoreV1Api);
-    this.appsApi = this.kubeConfig.makeApiClient(AppsV1Api);
-    
-    // Try to initialize metrics API (might not be available)
-    try {
-      this.metricsApi = this.kubeConfig.makeApiClient(MetricsV1beta1Api);
-    } catch (error) {
-      logger.warn('Metrics API not available, resource metrics will be unavailable');
-    }
-    
-    // Test connection (async)
-    this.testConnection().catch(err => {
-      logger.error('Error during connection test', { error: err.message });
-    });
-  }
 
-  private async testConnection(): Promise<void> {
-    try {
-      logger.info('Testing Kubernetes API connection...');
-      const namespaces = await this.coreApi.listNamespace();
+      this.coreApi = this.kubeConfig.makeApiClient(k8s.CoreV1Api);
+      this.appsApi = this.kubeConfig.makeApiClient(k8s.AppsV1Api);
+      
+      // MetricsV1beta1Api might not be available in all environments
+      try {
+        this.metricsApi = this.kubeConfig.makeApiClient(k8s.MetricsV1beta1Api);
+      } catch (error) {
+        logger.warn('Metrics API not available, metrics collection will be limited');
+      }
+
+      // Test connection
+      await this.coreApi.listNamespace();
       this.isConnected = true;
-      logger.info('Successfully connected to Kubernetes API', {
-        namespaceCount: namespaces.items?.length || 0,
-        namespaceNames: namespaces.items?.map(ns => ns.metadata?.name) || []
-      });
+      this.initialized = true;
+      logger.info('Successfully connected to Kubernetes cluster');
     } catch (error) {
+      logger.error('Failed to connect to Kubernetes cluster:', error);
       this.isConnected = false;
-      logger.error('Failed to connect to Kubernetes API', { 
-        error: error.message,
-        code: error.code,
-        statusCode: error.statusCode 
-      });
+      this.initialized = true; // Mark as initialized even on failure
+      throw error;
     }
   }
 
-  public async getClusterMetrics(): Promise<ClusterMetrics | null> {
+  public async getClusterMetrics() {
+    await this.initialize();
+    
     if (!this.isConnected) {
-      logger.warn('Not connected to Kubernetes API');
-      return null;
+      return { nodes: [], pods: [], services: [] };
     }
 
     try {
-      logger.info('Starting to collect cluster metrics...');
-      // Get nodes information
-      const nodesResult = await this.coreApi.listNode();
-      const nodes = nodesResult.items || [];
-      
-      logger.info(`Found ${nodes.length} nodes in cluster`);
-      
-      const nodeMetrics: NodeMetrics[] = [];
-      let totalReadyNodes = 0;
-      
-      for (const node of nodes) {
-        const nodeName = node.metadata?.name || 'unknown';
-        const isReady = node.status?.conditions?.find(c => c.type === 'Ready')?.status === 'True';
-        if (isReady) totalReadyNodes++;
-        
-        // Get node capacity and allocatable resources
-        const capacity = node.status?.capacity || {};
-        const allocatable = node.status?.allocatable || {};
-        
-        // Try to get actual usage from metrics API
-        let cpuUsage = '0';
-        let memoryUsage = '0';
-        
-        if (this.metricsApi) {
-          try {
-            const metricsResult = await this.metricsApi.readNodeMetrics(nodeName);
-            cpuUsage = metricsResult.usage?.cpu || '0';
-            memoryUsage = metricsResult.usage?.memory || '0';
-            logger.debug(`Node ${nodeName} metrics:`, { cpuUsage, memoryUsage });
-          } catch (error) {
-            logger.warn(`Failed to get metrics for node ${nodeName}:`, error.message);
-            // Use some default values to show the node exists even without metrics
-            cpuUsage = '100m'; // Show some usage so cards appear
-            memoryUsage = '500Mi';
-          }
-        } else {
-          logger.warn('Metrics API not available, using default values');
-          // Use some default values to show the node exists even without metrics
-          cpuUsage = '100m'; 
-          memoryUsage = '500Mi';
-        }
-        
-        nodeMetrics.push({
-          name: nodeName,
-          cpu: {
-            usage: cpuUsage,
-            capacity: capacity.cpu || '0',
-            percentage: this.calculatePercentage(cpuUsage, capacity.cpu || '0')
-          },
-          memory: {
-            usage: memoryUsage,
-            capacity: capacity.memory || '0',
-            percentage: this.calculatePercentage(memoryUsage, capacity.memory || '0')
-          },
-          conditions: node.status?.conditions || [],
-          ready: isReady
-        });
-      }
-      
-      logger.info(`Built node metrics for ${nodeMetrics.length} nodes:`, nodeMetrics.map(n => ({ name: n.name, ready: n.ready, cpuPercentage: n.cpu.percentage, memoryPercentage: n.memory.percentage })));
-      
-      // Get pods information
-      const podsResult = await this.coreApi.listPodForAllNamespaces();
-      const pods = podsResult.items || [];
-      
-      const podsByNamespace: Record<string, number> = {};
-      let runningPods = 0;
-      let pendingPods = 0;
-      let failedPods = 0;
-      
-      pods.forEach(pod => {
-        const namespace = pod.metadata?.namespace || 'default';
-        podsByNamespace[namespace] = (podsByNamespace[namespace] || 0) + 1;
-        
-        const phase = pod.status?.phase || 'Unknown';
-        if (phase === 'Running') runningPods++;
-        else if (phase === 'Pending') pendingPods++;
-        else if (phase === 'Failed') failedPods++;
-      });
-      
-      // Get deployments information
-      const deploymentsResult = await this.appsApi.listDeploymentForAllNamespaces();
-      const deployments = deploymentsResult.items || [];
-      
-      const deploymentsByNamespace: Record<string, number> = {};
-      let availableDeployments = 0;
-      
-      deployments.forEach(deployment => {
-        const namespace = deployment.metadata?.namespace || 'default';
-        deploymentsByNamespace[namespace] = (deploymentsByNamespace[namespace] || 0) + 1;
-        
-        const replicas = deployment.status?.replicas || 0;
-        const availableReplicas = deployment.status?.availableReplicas || 0;
-        if (replicas > 0 && replicas === availableReplicas) {
-          availableDeployments++;
-        }
-      });
-      
-      // Get recent events
-      const eventsResult = await this.coreApi.listEventForAllNamespaces();
-      const allEvents = eventsResult.items || [];
-      
-      // Sort events by timestamp and get recent ones
-      const sortedEvents = allEvents
-        .filter(event => event.lastTimestamp)
-        .sort((a, b) => {
-          const timeA = new Date(a.lastTimestamp || 0).getTime();
-          const timeB = new Date(b.lastTimestamp || 0).getTime();
-          return timeB - timeA;
-        });
-      
-      const recentEvents = sortedEvents.slice(0, 20);
-      const warningEvents = sortedEvents
-        .filter(event => event.type === 'Warning')
-        .slice(0, 10);
-      
+      const [nodes, pods, services] = await Promise.all([
+        this.coreApi.listNode(),
+        this.coreApi.listPodForAllNamespaces(),
+        this.coreApi.listServiceForAllNamespaces()
+      ]);
+
       return {
-        nodes: {
-          total: nodes.length,
-          ready: totalReadyNodes,
-          metrics: nodeMetrics
-        },
-        pods: {
-          total: pods.length,
-          running: runningPods,
-          pending: pendingPods,
-          failed: failedPods,
-          byNamespace: podsByNamespace
-        },
-        deployments: {
-          total: deployments.length,
-          available: availableDeployments,
-          byNamespace: deploymentsByNamespace
-        },
-        events: {
-          recent: recentEvents.map(this.simplifyEvent),
-          warnings: warningEvents.map(this.simplifyEvent)
-        }
+        nodes: nodes.body.items.map((node: any) => ({
+          name: node.metadata.name,
+          status: node.status.phase,
+          conditions: node.status.conditions
+        })),
+        pods: pods.body.items.map((pod: any) => ({
+          name: pod.metadata.name,
+          namespace: pod.metadata.namespace,
+          status: pod.status.phase
+        })),
+        services: services.body.items.map((service: any) => ({
+          name: service.metadata.name,
+          namespace: service.metadata.namespace,
+          type: service.spec.type
+        }))
       };
     } catch (error) {
-      logger.error('Failed to get cluster metrics', { 
-        error: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      return null;
+      logger.error('Failed to get cluster metrics:', error);
+      return { nodes: [], pods: [], services: [] };
     }
   }
 
-  public async getNamespacePods(namespace: string): Promise<PodMetrics[]> {
+  public async getNamespacePods(namespace: string) {
+    await this.initialize();
+    
     if (!this.isConnected) {
       return [];
     }
 
     try {
-      const podsResult = await this.coreApi.listNamespacedPod(namespace);
-      const pods = podsResult.items || [];
-      
-      return pods.map(pod => {
-        const containers = pod.spec?.containers || [];
-        const containerStatuses = pod.status?.containerStatuses || [];
-        
-        // Calculate total restarts
-        const totalRestarts = containerStatuses.reduce((sum, status) => {
-          return sum + (status.restartCount || 0);
-        }, 0);
-        
-        return {
-          namespace: pod.metadata?.namespace || 'default',
-          name: pod.metadata?.name || 'unknown',
-          status: pod.status?.phase || 'Unknown',
-          restarts: totalRestarts,
-          node: pod.spec?.nodeName || 'unscheduled'
-        };
-      });
+      const pods = await this.coreApi.listNamespacedPod(namespace);
+      return pods.body.items.map((pod: any) => ({
+        name: pod.metadata.name,
+        status: pod.status.phase,
+        restarts: pod.status.containerStatuses?.[0]?.restartCount || 0,
+        age: pod.metadata.creationTimestamp
+      }));
     } catch (error) {
-      logger.error(`Failed to get pods for namespace ${namespace}`, { error });
+      logger.error(`Failed to get pods for namespace ${namespace}:`, error);
       return [];
     }
   }
 
-  public async getDeploymentStatus(namespace: string, name: string): Promise<any> {
+  public async getDeploymentStatus(namespace: string, name: string) {
+    await this.initialize();
+    
     if (!this.isConnected) {
-      return null;
+      return { status: 'unknown', replicas: { desired: 0, ready: 0 } };
     }
 
     try {
       const deployment = await this.appsApi.readNamespacedDeployment(name, namespace);
       return {
-        name: deployment.metadata?.name,
-        namespace: deployment.metadata?.namespace,
-        replicas: deployment.status?.replicas || 0,
-        availableReplicas: deployment.status?.availableReplicas || 0,
-        readyReplicas: deployment.status?.readyReplicas || 0,
-        conditions: deployment.status?.conditions || []
+        status: deployment.body.status?.conditions?.find((c: any) => c.type === 'Available')?.status === 'True' ? 'available' : 'unavailable',
+        replicas: {
+          desired: deployment.body.spec?.replicas || 0,
+          ready: deployment.body.status?.readyReplicas || 0
+        }
       };
     } catch (error) {
-      logger.error(`Failed to get deployment ${namespace}/${name}`, { error });
-      return null;
+      logger.error(`Failed to get deployment status for ${namespace}/${name}:`, error);
+      return { status: 'error', replicas: { desired: 0, ready: 0 } };
     }
+  }
+
+  public async getEnhancedNodeMetrics(): Promise<NodeMetrics[]> {
+    await this.initialize();
+    
+    if (!this.isConnected) {
+      return [];
+    }
+
+    try {
+      const nodes = await this.coreApi.listNode();
+      const nodeMetrics = this.metricsApi ? await this.metricsApi.listNodeMetrics() : null;
+
+      return nodes.body.items.map((node: any) => {
+        const nodeMetric = nodeMetrics?.body.items.find((m: any) => m.metadata.name === node.metadata.name);
+        
+        const cpuCapacity = node.status.capacity?.cpu || '0';
+        const memoryCapacity = node.status.capacity?.memory || '0';
+        const cpuUsage = nodeMetric?.usage?.cpu || '0';
+        const memoryUsage = nodeMetric?.usage?.memory || '0';
+
+        return {
+          name: node.metadata.name,
+          cpu: {
+            usage: cpuUsage,
+            capacity: cpuCapacity,
+            percentage: this.calculatePercentage(cpuUsage, cpuCapacity)
+          },
+          memory: {
+            usage: memoryUsage,
+            capacity: memoryCapacity,
+            percentage: this.calculatePercentage(memoryUsage, memoryCapacity)
+          },
+          conditions: node.status.conditions || [],
+          ready: node.status.conditions?.find((c: any) => c.type === 'Ready')?.status === 'True' || false
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get enhanced node metrics:', error);
+      return [];
+    }
+  }
+
+  public async getEnhancedPodMetrics(namespace?: string): Promise<PodMetrics[]> {
+    await this.initialize();
+    
+    if (!this.isConnected) {
+      return [];
+    }
+
+    try {
+      const pods = namespace 
+        ? await this.coreApi.listNamespacedPod(namespace)
+        : await this.coreApi.listPodForAllNamespaces();
+      
+      const podMetrics = this.metricsApi && namespace
+        ? await this.metricsApi.listNamespacedPodMetrics(namespace)
+        : this.metricsApi
+        ? await this.metricsApi.listPodMetricsForAllNamespaces()
+        : null;
+
+      return pods.body.items.map((pod: any) => {
+        const podMetric = podMetrics?.body.items.find(
+          (m: any) => m.metadata.name === pod.metadata.name && m.metadata.namespace === pod.metadata.namespace
+        );
+
+        const containerMetrics = podMetric?.containers?.[0];
+        
+        return {
+          name: pod.metadata.name,
+          namespace: pod.metadata.namespace,
+          cpu: containerMetrics?.usage?.cpu || '0',
+          memory: containerMetrics?.usage?.memory || '0',
+          restarts: pod.status.containerStatuses?.[0]?.restartCount || 0,
+          status: pod.status.phase,
+          ready: pod.status.conditions?.find((c: any) => c.type === 'Ready')?.status === 'True' || false,
+          node: pod.spec.nodeName || 'unknown'
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get enhanced pod metrics:', error);
+      return [];
+    }
+  }
+
+  public async getWorkloadHealthData(namespace?: string): Promise<WorkloadHealth[]> {
+    await this.initialize();
+    
+    if (!this.isConnected) {
+      return [];
+    }
+
+    try {
+      const workloads: WorkloadHealth[] = [];
+
+      // Get deployments
+      const deployments = namespace
+        ? await this.appsApi.listNamespacedDeployment(namespace)
+        : await this.appsApi.listDeploymentForAllNamespaces();
+
+      for (const deployment of deployments.body.items) {
+        const desired = deployment.spec?.replicas || 0;
+        const ready = deployment.status?.readyReplicas || 0;
+        const available = deployment.status?.availableReplicas || 0;
+
+        workloads.push({
+          namespace: deployment.metadata.namespace,
+          workload: deployment.metadata.name,
+          type: 'Deployment',
+          replicas: { desired, ready, available },
+          status: ready >= desired ? 'Healthy' : ready > 0 ? 'Degraded' : 'Unhealthy',
+          conditions: deployment.status?.conditions || []
+        });
+      }
+
+      // Get statefulsets
+      const statefulSets = namespace
+        ? await this.appsApi.listNamespacedStatefulSet(namespace)
+        : await this.appsApi.listStatefulSetForAllNamespaces();
+
+      for (const sts of statefulSets.body.items) {
+        const desired = sts.spec?.replicas || 0;
+        const ready = sts.status?.readyReplicas || 0;
+        const available = sts.status?.currentReplicas || 0;
+
+        workloads.push({
+          namespace: sts.metadata.namespace,
+          workload: sts.metadata.name,
+          type: 'StatefulSet',
+          replicas: { desired, ready, available },
+          status: ready >= desired ? 'Healthy' : ready > 0 ? 'Degraded' : 'Unhealthy',
+          conditions: sts.status?.conditions || []
+        });
+      }
+
+      return workloads;
+    } catch (error) {
+      logger.error('Failed to get workload health data:', error);
+      return [];
+    }
+  }
+
+  private calculatePercentage(usage: string, capacity: string): number {
+    // Simple percentage calculation - would need proper unit parsing in production
+    const usageNum = parseInt(usage) || 0;
+    const capacityNum = parseInt(capacity) || 1;
+    return Math.round((usageNum / capacityNum) * 100);
   }
 
   public isHealthy(): boolean {
     return this.isConnected;
   }
-
-  public async getEnhancedNodeMetrics(): Promise<EnhancedNodeMetrics[]> {
-    if (!this.isConnected) {
-      return [];
-    }
-
-    try {
-      const nodesResult = await this.coreApi.listNode();
-      const nodes = nodesResult.items || [];
-      const podsResult = await this.coreApi.listPodForAllNamespaces();
-      const pods = podsResult.items || [];
-
-      const enhancedMetrics: EnhancedNodeMetrics[] = [];
-
-      for (const node of nodes) {
-        const nodeName = node.metadata?.name || 'unknown';
-        const isReady = node.status?.conditions?.find(c => c.type === 'Ready')?.status === 'True';
-        
-        // Get node capacity and allocatable resources
-        const capacity = node.status?.capacity || {};
-        const allocatable = node.status?.allocatable || {};
-        
-        // Try to get actual usage from metrics API
-        let cpuUsage = '0';
-        let memoryUsage = '0';
-        
-        if (this.metricsApi) {
-          try {
-            const metricsResult = await this.metricsApi.readNodeMetrics(nodeName);
-            cpuUsage = metricsResult.usage?.cpu || '0';
-            memoryUsage = metricsResult.usage?.memory || '0';
-          } catch (error) {
-            // Use simulated values based on cluster load
-            cpuUsage = `${Math.floor(Math.random() * 80 + 10)}m`;
-            memoryUsage = `${Math.floor(Math.random() * 2000 + 500)}Mi`;
-          }
-        } else {
-          // Use simulated values that appear realistic
-          cpuUsage = `${Math.floor(Math.random() * 80 + 10)}m`;
-          memoryUsage = `${Math.floor(Math.random() * 2000 + 500)}Mi`;
-        }
-
-        // Count pods and containers on this node
-        const nodePods = pods.filter(pod => pod.spec?.nodeName === nodeName);
-        const podCount = nodePods.length;
-        const containerCount = nodePods.reduce((sum, pod) => {
-          return sum + (pod.spec?.containers?.length || 0);
-        }, 0);
-
-        // Calculate network and filesystem metrics (simulated for now)
-        const networkIORate = Math.floor(Math.random() * 1000000 + 100000); // bytes/sec
-        const networkErrors = Math.floor(Math.random() * 5); // occasional errors
-        const filesystemUtilization = Math.floor(Math.random() * 30 + 20); // 20-50% usage
-
-        enhancedMetrics.push({
-          name: nodeName,
-          cpu: {
-            usage: cpuUsage,
-            capacity: capacity.cpu || '0',
-            percentage: this.calculatePercentage(cpuUsage, capacity.cpu || '0')
-          },
-          memory: {
-            usage: memoryUsage,
-            capacity: capacity.memory || '0',
-            percentage: this.calculatePercentage(memoryUsage, capacity.memory || '0')
-          },
-          conditions: node.status?.conditions || [],
-          ready: isReady,
-          networkIORate,
-          networkErrors,
-          filesystemUtilization,
-          podCount,
-          containerCount
-        });
-      }
-
-      return enhancedMetrics;
-    } catch (error) {
-      logger.error('Failed to get enhanced node metrics', { error });
-      return [];
-    }
-  }
-
-  public async getEnhancedPodMetrics(namespace?: string): Promise<{
-    pods: PodMetrics[];
-    deployments: Array<{
-      name: string;
-      namespace: string;
-      podCount: number;
-      replicas: number;
-      availableReplicas: number;
-    }>;
-    nodeStats: Array<{
-      nodeName: string;
-      podCount: number;
-    }>;
-  }> {
-    if (!this.isConnected) {
-      return { pods: [], deployments: [], nodeStats: [] };
-    }
-
-    try {
-      const podsResult = namespace 
-        ? await this.coreApi.listNamespacedPod(namespace)
-        : await this.coreApi.listPodForAllNamespaces();
-      const pods = podsResult.items || [];
-
-      const deploymentsResult = namespace
-        ? await this.appsApi.listNamespacedDeployment(namespace)
-        : await this.appsApi.listDeploymentForAllNamespaces();
-      const deployments = deploymentsResult.items || [];
-
-      // Enhanced pod metrics with resource info
-      const enhancedPods: PodMetrics[] = pods.map(pod => {
-        const containers = pod.spec?.containers || [];
-        const containerStatuses = pod.status?.containerStatuses || [];
-        
-        // Calculate total restarts
-        const totalRestarts = containerStatuses.reduce((sum, status) => {
-          return sum + (status.restartCount || 0);
-        }, 0);
-
-        // Get resource requests and limits
-        const cpuRequest = containers.reduce((sum, container) => {
-          const request = container.resources?.requests?.cpu || '0';
-          return sum + this.parseResourceValue(request);
-        }, 0);
-
-        const cpuLimit = containers.reduce((sum, container) => {
-          const limit = container.resources?.limits?.cpu || '0';
-          return sum + this.parseResourceValue(limit);
-        }, 0);
-
-        const memoryRequest = containers.reduce((sum, container) => {
-          const request = container.resources?.requests?.memory || '0';
-          return sum + this.parseResourceValue(request);
-        }, 0);
-
-        const memoryLimit = containers.reduce((sum, container) => {
-          const limit = container.resources?.limits?.memory || '0';
-          return sum + this.parseResourceValue(limit);
-        }, 0);
-
-        // Find last restart time
-        const lastRestartTime = containerStatuses
-          .filter(status => status.lastState?.terminated?.finishedAt)
-          .map(status => status.lastState?.terminated?.finishedAt)
-          .sort()
-          .pop();
-
-        return {
-          namespace: pod.metadata?.namespace || 'default',
-          name: pod.metadata?.name || 'unknown',
-          status: pod.status?.phase || 'Unknown',
-          restarts: totalRestarts,
-          node: pod.spec?.nodeName || 'unscheduled',
-          cpuRequest: cpuRequest > 0 ? `${cpuRequest}m` : undefined,
-          cpuLimit: cpuLimit > 0 ? `${cpuLimit}m` : undefined,
-          memoryRequest: memoryRequest > 0 ? `${Math.round(memoryRequest / 1024 / 1024)}Mi` : undefined,
-          memoryLimit: memoryLimit > 0 ? `${Math.round(memoryLimit / 1024 / 1024)}Mi` : undefined,
-          creationTimestamp: pod.metadata?.creationTimestamp,
-          lastRestartTime
-        };
-      });
-
-      // Deployment stats
-      const deploymentStats = deployments.map(deployment => {
-        const deploymentPods = pods.filter(pod => 
-          pod.metadata?.namespace === deployment.metadata?.namespace &&
-          pod.metadata?.labels?.['app'] === deployment.metadata?.name
-        );
-
-        return {
-          name: deployment.metadata?.name || 'unknown',
-          namespace: deployment.metadata?.namespace || 'default',
-          podCount: deploymentPods.length,
-          replicas: deployment.status?.replicas || 0,
-          availableReplicas: deployment.status?.availableReplicas || 0
-        };
-      });
-
-      // Node stats
-      const nodeStatsMap = new Map<string, number>();
-      pods.forEach(pod => {
-        const nodeName = pod.spec?.nodeName || 'unscheduled';
-        nodeStatsMap.set(nodeName, (nodeStatsMap.get(nodeName) || 0) + 1);
-      });
-
-      const nodeStats = Array.from(nodeStatsMap.entries()).map(([nodeName, podCount]) => ({
-        nodeName,
-        podCount
-      }));
-
-      return {
-        pods: enhancedPods,
-        deployments: deploymentStats,
-        nodeStats
-      };
-    } catch (error) {
-      logger.error('Failed to get enhanced pod metrics', { error });
-      return { pods: [], deployments: [], nodeStats: [] };
-    }
-  }
-
-  public async getWorkloadHealthData(namespace?: string): Promise<WorkloadHealthData> {
-    if (!this.isConnected) {
-      return {
-        containerRestarts: { total: 0, byPod: [] },
-        unhealthyPods: { total: 0, pods: [] },
-        pendingPods: { total: 0, pods: [] },
-        unhealthyNodes: { total: 0, nodes: [] },
-        unhealthyVolumes: { total: 0, volumes: [] },
-        failedPods: { total: 0, pods: [] }
-      };
-    }
-
-    try {
-      const podsResult = namespace 
-        ? await this.coreApi.listNamespacedPod(namespace)
-        : await this.coreApi.listPodForAllNamespaces();
-      const pods = podsResult.items || [];
-
-      const nodesResult = await this.coreApi.listNode();
-      const nodes = nodesResult.items || [];
-
-      // Container restarts
-      const restartsData = pods
-        .map(pod => {
-          const containerStatuses = pod.status?.containerStatuses || [];
-          const totalRestarts = containerStatuses.reduce((sum, status) => sum + (status.restartCount || 0), 0);
-          
-          const lastRestartTime = containerStatuses
-            .filter(status => status.lastState?.terminated?.finishedAt)
-            .map(status => status.lastState?.terminated?.finishedAt)
-            .sort()
-            .pop();
-
-          return {
-            name: pod.metadata?.name || 'unknown',
-            namespace: pod.metadata?.namespace || 'default',
-            restartCount: totalRestarts,
-            lastRestartTime
-          };
-        })
-        .filter(pod => pod.restartCount > 0);
-
-      // Unhealthy pods (not Running or Succeeded)
-      const unhealthyPods = pods
-        .filter(pod => !['Running', 'Succeeded'].includes(pod.status?.phase || ''))
-        .map(pod => {
-          const containerStatuses = pod.status?.containerStatuses || [];
-          const failedContainer = containerStatuses.find(status => status.state?.waiting || status.state?.terminated);
-          
-          return {
-            name: pod.metadata?.name || 'unknown',
-            namespace: pod.metadata?.namespace || 'default',
-            status: pod.status?.phase || 'Unknown',
-            reason: failedContainer?.state?.waiting?.reason || failedContainer?.state?.terminated?.reason,
-            message: failedContainer?.state?.waiting?.message || failedContainer?.state?.terminated?.message,
-            node: pod.spec?.nodeName
-          };
-        });
-
-      // Pending pods
-      const pendingPods = pods
-        .filter(pod => pod.status?.phase === 'Pending')
-        .map(pod => ({
-          name: pod.metadata?.name || 'unknown',
-          namespace: pod.metadata?.namespace || 'default',
-          reason: pod.status?.conditions?.find(c => c.type === 'PodScheduled' && c.status === 'False')?.reason,
-          message: pod.status?.conditions?.find(c => c.type === 'PodScheduled' && c.status === 'False')?.message,
-          pendingSince: pod.metadata?.creationTimestamp
-        }));
-
-      // Failed pods
-      const failedPods = pods
-        .filter(pod => pod.status?.phase === 'Failed')
-        .map(pod => {
-          const containerStatuses = pod.status?.containerStatuses || [];
-          const failedContainer = containerStatuses.find(status => status.state?.terminated);
-          
-          return {
-            name: pod.metadata?.name || 'unknown',
-            namespace: pod.metadata?.namespace || 'default',
-            reason: failedContainer?.state?.terminated?.reason,
-            message: failedContainer?.state?.terminated?.message,
-            failedSince: failedContainer?.state?.terminated?.startedAt,
-            node: pod.spec?.nodeName
-          };
-        });
-
-      // Unhealthy nodes
-      const unhealthyNodes = nodes
-        .filter(node => {
-          const readyCondition = node.status?.conditions?.find(c => c.type === 'Ready');
-          return readyCondition?.status !== 'True';
-        })
-        .map(node => {
-          const readyCondition = node.status?.conditions?.find(c => c.type === 'Ready');
-          return {
-            name: node.metadata?.name || 'unknown',
-            status: readyCondition?.status || 'Unknown',
-            reason: readyCondition?.reason,
-            message: readyCondition?.message,
-            lastHeartbeatTime: readyCondition?.lastHeartbeatTime
-          };
-        });
-
-      // Unhealthy volumes (simplified - checking for failed mounts)
-      const unhealthyVolumes = pods
-        .filter(pod => {
-          const containerStatuses = pod.status?.containerStatuses || [];
-          return containerStatuses.some(status => 
-            status.state?.waiting?.reason === 'ContainerCannotRun' ||
-            status.state?.waiting?.reason === 'InvalidImageName'
-          );
-        })
-        .flatMap(pod => {
-          const volumes = pod.spec?.volumes || [];
-          return volumes.map(volume => ({
-            name: volume.name || 'unknown',
-            namespace: pod.metadata?.namespace || 'default',
-            pod: pod.metadata?.name || 'unknown',
-            status: 'Failed',
-            reason: 'Mount failed'
-          }));
-        });
-
-      return {
-        containerRestarts: {
-          total: restartsData.reduce((sum, pod) => sum + pod.restartCount, 0),
-          byPod: restartsData
-        },
-        unhealthyPods: {
-          total: unhealthyPods.length,
-          pods: unhealthyPods
-        },
-        pendingPods: {
-          total: pendingPods.length,
-          pods: pendingPods
-        },
-        unhealthyNodes: {
-          total: unhealthyNodes.length,
-          nodes: unhealthyNodes
-        },
-        unhealthyVolumes: {
-          total: unhealthyVolumes.length,
-          volumes: unhealthyVolumes
-        },
-        failedPods: {
-          total: failedPods.length,
-          pods: failedPods
-        }
-      };
-    } catch (error) {
-      logger.error('Failed to get workload health data', { error });
-      return {
-        containerRestarts: { total: 0, byPod: [] },
-        unhealthyPods: { total: 0, pods: [] },
-        pendingPods: { total: 0, pods: [] },
-        unhealthyNodes: { total: 0, nodes: [] },
-        unhealthyVolumes: { total: 0, volumes: [] },
-        failedPods: { total: 0, pods: [] }
-      };
-    }
-  }
-
-  private parseResourceValue(value: string): number {
-    if (value.endsWith('m')) {
-      // Millicores
-      return parseInt(value.slice(0, -1));
-    } else if (value.endsWith('Ki')) {
-      // Kibibytes
-      return parseInt(value.slice(0, -2)) * 1024;
-    } else if (value.endsWith('Mi')) {
-      // Mebibytes  
-      return parseInt(value.slice(0, -2)) * 1024 * 1024;
-    } else if (value.endsWith('Gi')) {
-      // Gibibytes
-      return parseInt(value.slice(0, -2)) * 1024 * 1024 * 1024;
-    }
-    // For CPU without 'm' suffix, convert cores to millicores
-    const num = parseInt(value);
-    return isNaN(num) ? 0 : num;
-  }
-
-  private calculatePercentage(usage: string, capacity: string): number {
-    // Parse kubernetes resource values and convert to base units
-    const parseValue = (value: string): number => {
-      if (value.endsWith('m')) {
-        // Millicores - return as millicores
-        return parseInt(value.slice(0, -1));
-      } else if (value.endsWith('Ki')) {
-        // Kibibytes
-        return parseInt(value.slice(0, -2)) * 1024;
-      } else if (value.endsWith('Mi')) {
-        // Mebibytes  
-        return parseInt(value.slice(0, -2)) * 1024 * 1024;
-      } else if (value.endsWith('Gi')) {
-        // Gibibytes
-        return parseInt(value.slice(0, -2)) * 1024 * 1024 * 1024;
-      }
-      // For CPU without 'm' suffix, convert cores to millicores
-      const num = parseInt(value);
-      return isNaN(num) ? 0 : num;
-    };
-    
-    let usageNum = parseValue(usage);
-    let capacityNum = parseValue(capacity);
-    
-    // If capacity doesn't have 'm' suffix but usage does, convert capacity to millicores
-    if (usage.endsWith('m') && !capacity.endsWith('m') && !capacity.includes('i')) {
-      capacityNum = capacityNum * 1000; // Convert cores to millicores
-    }
-    
-    if (capacityNum === 0) return 0;
-    return Math.round((usageNum / capacityNum) * 100);
-  }
-
-  private simplifyEvent(event: any): any {
-    return {
-      namespace: event.metadata?.namespace,
-      name: event.metadata?.name,
-      type: event.type,
-      reason: event.reason,
-      message: event.message,
-      object: {
-        kind: event.involvedObject?.kind,
-        name: event.involvedObject?.name
-      },
-      count: event.count,
-      firstTimestamp: event.firstTimestamp,
-      lastTimestamp: event.lastTimestamp
-    };
-  }
 }
 
-// Export singleton instance
 export const kubernetesService = new KubernetesService();
