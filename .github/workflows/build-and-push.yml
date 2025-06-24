@@ -139,25 +139,34 @@ jobs:
     needs: [build-backend, build-frontend, build-ingestion]
     if: github.event_name != 'pull_request'
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
     - name: Run Trivy vulnerability scanner (Backend)
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend:${{ github.ref_name }}
-        format: 'sarif'
-        output: 'backend-trivy-results.sarif'
+        format: 'table'
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+        severity: 'CRITICAL,HIGH'
 
-    - name: Upload Trivy scan results (Backend)
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
+    - name: Run Trivy vulnerability scanner (Frontend)
+      uses: aquasecurity/trivy-action@master
       with:
-        sarif_file: 'backend-trivy-results.sarif'
+        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend:${{ github.ref_name }}
+        format: 'table'
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+        severity: 'CRITICAL,HIGH'
 
-    - name: Run Trivy scan results summary
+    - name: Run Trivy vulnerability scanner (Ingestion)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-ingestion-service:${{ github.ref_name }}
+        format: 'table'
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+        severity: 'CRITICAL,HIGH'
+
+    - name: Security scan summary
       run: |
-        echo "✅ Security scan completed for DockerHub images"
-        echo "🔍 Backend: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend:${{ github.ref_name }}"
-        echo "🔍 Frontend: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend:${{ github.ref_name }}"
-        echo "🔍 Ingestion: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-ingestion-service:${{ github.ref_name }}"
+        echo "✅ Security scans completed for all DockerHub images"
+        echo "📦 Images scanned:"
+        echo "  - Backend: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-backend:${{ github.ref_name }}"
+        echo "  - Frontend: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-frontend:${{ github.ref_name }}"
+        echo "  - Ingestion: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/appsentry-ingestion-service:${{ github.ref_name }}"
