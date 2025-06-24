@@ -3,13 +3,13 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with npm ci for faster, reliable builds
+RUN npm ci
 
-# Copy source code
+# Copy source code (excluding node_modules via .dockerignore)
 COPY . .
 
 # Build the application
@@ -23,6 +23,10 @@ COPY --from=builder /app/build /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Create nginx user and set permissions
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html
 
 # Expose port
 EXPOSE 3000
