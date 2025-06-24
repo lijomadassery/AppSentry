@@ -33,26 +33,9 @@ const envSchema = Joi.object({
   JWT_EXPIRES_IN: Joi.string().default('1h'),
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
   
-  // Optional legacy fields (for backwards compatibility)
-  MYSQL_HOST: Joi.string().optional(),
-  MYSQL_PORT: Joi.number().optional(),
-  MYSQL_DATABASE: Joi.string().optional(),
-  MYSQL_USERNAME: Joi.string().optional(),
-  MYSQL_PASSWORD: Joi.string().optional(),
+  // Optional legacy fields (for backwards compatibility)  
   REDIS_URL: Joi.string().optional(),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
-  HEALTH_CHECK_PASSWORD: Joi.string().optional(),
-  PLAYWRIGHT_HEADLESS: Joi.boolean().optional(),
-  TEST_TIMEOUT: Joi.number().optional(),
-  PARALLEL_TEST_LIMIT: Joi.number().optional(),
-  TEAMS_WEBHOOK_URL: Joi.string().allow('').optional(),
-  SENDGRID_API_KEY: Joi.string().allow('').optional(),
-  EMAIL_FROM: Joi.string().allow('').optional(),
-  EMAIL_RECIPIENTS: Joi.string().allow('').optional(),
-  ENABLE_REGISTRATION: Joi.boolean().optional(),
-  ENABLE_PASSWORD_RESET: Joi.boolean().optional(),
-  ENABLE_BULK_OPERATIONS: Joi.boolean().optional(),
-  ENABLE_SCHEDULED_REPORTS: Joi.boolean().optional(),
 }).unknown();
 
 const { error, value: envVars } = envSchema.validate(process.env);
@@ -96,38 +79,9 @@ export const config = {
     refreshExpiresIn: envVars.JWT_REFRESH_EXPIRES_IN,
   },
   
-  // Legacy configurations (optional, for backwards compatibility)
-  legacyDatabase: {
-    host: envVars.MYSQL_HOST || 'localhost',
-    port: envVars.MYSQL_PORT || 3306,
-    database: envVars.MYSQL_DATABASE || 'appsentry_dev',
-    username: envVars.MYSQL_USERNAME || 'root',
-    password: envVars.MYSQL_PASSWORD || 'password',
-  },
-  
+  // Redis configuration (optional)
   redis: {
     url: envVars.REDIS_URL || 'redis://localhost:6379',
     password: envVars.REDIS_PASSWORD || '',
-  },
-  
-  testing: {
-    healthCheckPassword: envVars.HEALTH_CHECK_PASSWORD || 'test-password',
-    playwrightHeadless: envVars.PLAYWRIGHT_HEADLESS || true,
-    testTimeout: envVars.TEST_TIMEOUT || 30000,
-    parallelTestLimit: envVars.PARALLEL_TEST_LIMIT || 5,
-  },
-  
-  notifications: {
-    teamsWebhookUrl: envVars.TEAMS_WEBHOOK_URL || '',
-    sendgridApiKey: envVars.SENDGRID_API_KEY || '',
-    emailFrom: envVars.EMAIL_FROM || '',
-    emailRecipients: envVars.EMAIL_RECIPIENTS || '',
-  },
-  
-  features: {
-    enableRegistration: envVars.ENABLE_REGISTRATION || false,
-    enablePasswordReset: envVars.ENABLE_PASSWORD_RESET || false,
-    enableBulkOperations: envVars.ENABLE_BULK_OPERATIONS || true,
-    enableScheduledReports: envVars.ENABLE_SCHEDULED_REPORTS || true,
   },
 };
