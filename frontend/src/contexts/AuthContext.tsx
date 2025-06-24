@@ -1,12 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../services/api';
+import { User } from '../types';
 
-interface User {
-  id: string;
+interface AuthUser extends User {
   username: string;
-  email: string;
-  displayName: string;
-  role: string;
 }
 
 interface AuthContextType {
@@ -40,7 +37,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           // Verify token is still valid by fetching user info
           const response = await api.get('/auth/me');
-          setUser(response.data);
+          const userData = response.data;
+          
+          // Set user data - ensure role is properly typed
+          const typedUser: User = {
+            id: userData.id,
+            displayName: userData.displayName,
+            email: userData.email,
+            role: userData.role as 'admin' | 'editor' | 'viewer'
+          };
+          setUser(typedUser);
         } catch (err) {
           // Token is invalid, remove it
           localStorage.removeItem('accessToken');
@@ -69,8 +75,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Set authorization header for future requests
       api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
 
-      // Set user data
-      setUser(userData);
+      // Set user data - ensure role is properly typed
+      const typedUser: User = {
+        id: userData.id,
+        displayName: userData.displayName,
+        email: userData.email,
+        role: userData.role as 'admin' | 'editor' | 'viewer'
+      };
+      setUser(typedUser);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error?.message || 'Login failed';
       setError(errorMessage);
