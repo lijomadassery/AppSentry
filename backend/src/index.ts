@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { initializeOTel, shutdownOTel } from './otel';
 import { App } from './app';
 import { logger } from './utils/logger';
-import { config } from './config/env';
+// import { config } from './config/env'; // Not used in this file
 import { clickHouseService } from './services/clickhouseService';
 
 // Initialize OpenTelemetry first

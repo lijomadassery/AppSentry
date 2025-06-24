@@ -8,7 +8,7 @@ import { Server } from 'socket.io';
 import { config } from './config/env';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { requestLogger } from './middlewares/requestLogger';
-import { apiLimiter } from './middlewares/rateLimiter';
+// import { apiLimiter } from './middlewares/rateLimiter';
 import { logger } from './utils/logger';
 import { database } from './database/prisma';
 import { healthCheckService } from './services/healthCheckService';
@@ -149,7 +149,7 @@ export class App {
     this.app.use('/api/health-checks', healthCheckRoutes);
     
     // API info endpoint
-    this.app.get('/api', (req, res) => {
+    this.app.get('/api', (_req, res) => {
       res.json({
         name: 'AppSentry API',
         version: '1.0.0',
