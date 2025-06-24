@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: docker.io/lijomadassery/appsentry-frontend:latest
+        image: docker.io/lijomadassery/appsentry-frontend:master
         ports:
         - containerPort: 3000
           name: http

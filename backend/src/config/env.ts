@@ -25,6 +25,11 @@ const envSchema = Joi.object({
   OTEL_SERVICE_VERSION: Joi.string().default('1.0.0'),
   OTEL_DEPLOYMENT_ENVIRONMENT: Joi.string().default('development'),
 
+  // JWT Authentication (required)
+  JWT_SECRET: Joi.string().required(),
+  JWT_EXPIRES_IN: Joi.string().default('1h'),
+  JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
+  
   // Optional legacy fields (for backwards compatibility)
   MYSQL_HOST: Joi.string().optional(),
   MYSQL_PORT: Joi.number().optional(),
@@ -33,16 +38,6 @@ const envSchema = Joi.object({
   MYSQL_PASSWORD: Joi.string().optional(),
   REDIS_URL: Joi.string().optional(),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
-  AZURE_AD_TENANT_ID: Joi.string().optional(),
-  AZURE_AD_CLIENT_ID: Joi.string().optional(),
-  AZURE_AD_CLIENT_SECRET: Joi.string().optional(),
-  AZURE_AD_REDIRECT_URI: Joi.string().optional(),
-  JWT_SECRET: Joi.string().optional(),
-  JWT_EXPIRES_IN: Joi.string().optional(),
-  JWT_REFRESH_EXPIRES_IN: Joi.string().optional(),
-  AZURE_STORAGE_ACCOUNT: Joi.string().allow('').optional(),
-  AZURE_STORAGE_KEY: Joi.string().allow('').optional(),
-  AZURE_STORAGE_CONTAINER: Joi.string().allow('').optional(),
   HEALTH_CHECK_PASSWORD: Joi.string().optional(),
   PLAYWRIGHT_HEADLESS: Joi.boolean().optional(),
   TEST_TIMEOUT: Joi.number().optional(),
@@ -86,6 +81,13 @@ export const config = {
     environment: envVars.OTEL_DEPLOYMENT_ENVIRONMENT,
   },
   
+  // JWT Authentication
+  jwt: {
+    secret: envVars.JWT_SECRET,
+    expiresIn: envVars.JWT_EXPIRES_IN,
+    refreshExpiresIn: envVars.JWT_REFRESH_EXPIRES_IN,
+  },
+  
   // Legacy configurations (optional, for backwards compatibility)
   database: {
     host: envVars.MYSQL_HOST || 'localhost',
@@ -98,25 +100,6 @@ export const config = {
   redis: {
     url: envVars.REDIS_URL || 'redis://localhost:6379',
     password: envVars.REDIS_PASSWORD || '',
-  },
-  
-  azureAd: {
-    tenantId: envVars.AZURE_AD_TENANT_ID || '',
-    clientId: envVars.AZURE_AD_CLIENT_ID || '',
-    clientSecret: envVars.AZURE_AD_CLIENT_SECRET || '',
-    redirectUri: envVars.AZURE_AD_REDIRECT_URI || '',
-  },
-  
-  jwt: {
-    secret: envVars.JWT_SECRET || 'development-secret',
-    expiresIn: envVars.JWT_EXPIRES_IN || '1h',
-    refreshExpiresIn: envVars.JWT_REFRESH_EXPIRES_IN || '7d',
-  },
-  
-  azureStorage: {
-    account: envVars.AZURE_STORAGE_ACCOUNT || '',
-    key: envVars.AZURE_STORAGE_KEY || '',
-    container: envVars.AZURE_STORAGE_CONTAINER || 'screenshots',
   },
   
   testing: {

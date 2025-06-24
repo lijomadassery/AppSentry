@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: docker.io/lijomadassery/appsentry-backend:latest
+        image: docker.io/lijomadassery/appsentry-backend:master
         ports:
         - containerPort: 3001
           name: http
@@ -51,10 +51,14 @@ spec:
           value: "production"
         - name: PORT
           value: "3001"
+        - name: CORS_ORIGIN
+          value: "*"
+        - name: LOG_LEVEL
+          value: "info"
         
         # ClickHouse Configuration
         - name: CLICKHOUSE_HOST
-          value: "clickhouse"
+          value: "clickhouse.appsentry-otel.svc.cluster.local"
         - name: CLICKHOUSE_PORT
           value: "8123"
         - name: CLICKHOUSE_DATABASE
@@ -71,6 +75,14 @@ spec:
           value: "AppSentry Backend"
         - name: OTEL_SERVICE_VERSION
           value: "1.0.0"
+        
+        # JWT Authentication Configuration
+        - name: JWT_SECRET
+          value: "appsentry-jwt-secret-2025-dev-cluster"
+        - name: JWT_EXPIRES_IN
+          value: "1h"
+        - name: JWT_REFRESH_EXPIRES_IN
+          value: "7d"
         
         resources:
           requests:

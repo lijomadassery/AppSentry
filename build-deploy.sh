@@ -73,29 +73,35 @@ log_info "Step 3: Creating namespace..."
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 log_success "Namespace '$NAMESPACE' ready"
 
-# Step 4: Build backend image
-log_info "Step 4: Building backend Docker image..."
-docker build -t $BACKEND_IMAGE:$TAG -f Dockerfile .
-if [ "$LOCAL_BUILD" = "false" ]; then
-    docker tag $BACKEND_IMAGE:$TAG $BACKEND_IMAGE:latest
-fi
-log_success "Backend image built: $BACKEND_IMAGE:$TAG"
+# Step 4: Handle Docker images
+if [ "$LOCAL_BUILD" = "true" ]; then
+    # Build images locally
+    log_info "Step 4: Building backend Docker image..."
+    docker build -t $BACKEND_IMAGE:$TAG -f Dockerfile .
+    log_success "Backend image built: $BACKEND_IMAGE:$TAG"
 
-# Step 5: Build frontend image
-log_info "Step 5: Building frontend Docker image..."
-docker build -t $FRONTEND_IMAGE:$TAG -f frontend/Dockerfile ./frontend
-if [ "$LOCAL_BUILD" = "false" ]; then
-    docker tag $FRONTEND_IMAGE:$TAG $FRONTEND_IMAGE:latest
-fi
-log_success "Frontend image built: $FRONTEND_IMAGE:$TAG"
+    log_info "Step 5: Building frontend Docker image..."
+    docker build -t $FRONTEND_IMAGE:$TAG -f frontend/Dockerfile ./frontend
+    log_success "Frontend image built: $FRONTEND_IMAGE:$TAG"
 
-# Step 5.5: Build ingestion service image
-log_info "Step 5.5: Building ingestion service Docker image..."
-docker build -t $INGESTION_IMAGE:$TAG -f ingestion-service/Dockerfile ./ingestion-service
-if [ "$LOCAL_BUILD" = "false" ]; then
-    docker tag $INGESTION_IMAGE:$TAG $INGESTION_IMAGE:latest
+    log_info "Step 5.5: Building ingestion service Docker image..."
+    docker build -t $INGESTION_IMAGE:$TAG -f ingestion-service/Dockerfile ./ingestion-service
+    log_success "Ingestion service image built: $INGESTION_IMAGE:$TAG"
+else
+    # Pull images from DockerHub
+    log_info "Step 4: Pulling Docker images from DockerHub..."
+    
+    log_info "Pulling backend image..."
+    docker pull $BACKEND_IMAGE:$TAG || docker pull $BACKEND_IMAGE:master
+    
+    log_info "Pulling frontend image..."
+    docker pull $FRONTEND_IMAGE:$TAG || docker pull $FRONTEND_IMAGE:master
+    
+    log_info "Pulling ingestion service image..."
+    docker pull $INGESTION_IMAGE:$TAG || docker pull $INGESTION_IMAGE:master
+    
+    log_success "All images pulled from DockerHub"
 fi
-log_success "Ingestion service image built: $INGESTION_IMAGE:$TAG"
 
 # Step 6: Deploy backend
 log_info "Step 6: Deploying backend to Kubernetes..."
