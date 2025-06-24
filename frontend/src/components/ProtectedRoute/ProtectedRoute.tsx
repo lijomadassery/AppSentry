@@ -40,7 +40,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    return <Login onLogin={login} isLoading={isLoading} error={error} />;
+    return <Login onLogin={login} isLoading={isLoading} error={error || undefined} />;
   }
 
   return <>{children}</>;
