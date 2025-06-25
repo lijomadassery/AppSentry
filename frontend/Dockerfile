@@ -12,6 +12,9 @@ RUN npm ci
 # Copy source code (excluding node_modules via .dockerignore)
 COPY . .
 
+# Set build-time environment variables
+ENV REACT_APP_API_URL=/api
+
 # Build the application
 RUN npm run build
 
