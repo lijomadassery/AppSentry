@@ -85,9 +85,7 @@ class ApplicationRegistryService {
       const statements = schemaSQL.split(';').filter(s => s.trim());
       for (const statement of statements) {
         if (statement.trim()) {
-          await clickHouseService.client.exec({
-            query: statement.trim()
-          });
+          await clickHouseService.exec(statement.trim());
         }
       }
 
@@ -107,27 +105,23 @@ class ApplicationRegistryService {
     const now = new Date();
 
     try {
-      await clickHouseService.client.insert({
-        table: 'appsentry.applications',
-        values: [{
-          id,
-          name: app.name,
-          team: app.team,
-          namespace: app.namespace,
-          environment: app.environment || 'development',
-          health_check_url: app.health_check_url,
-          health_check_interval: app.health_check_interval || 30,
-          status: app.status || 'unknown',
-          last_check_time: app.last_check_time || null,
-          created_at: now,
-          updated_at: now,
-          metadata: app.metadata ? JSON.stringify(app.metadata) : '',
-          tags: app.tags || [],
-          sla_target: app.sla_target || 99.9,
-          active: app.active !== false
-        }],
-        format: 'JSONEachRow'
-      });
+      await clickHouseService.insert('appsentry.applications', [{
+        id,
+        name: app.name,
+        team: app.team,
+        namespace: app.namespace,
+        environment: app.environment || 'development',
+        health_check_url: app.health_check_url,
+        health_check_interval: app.health_check_interval || 30,
+        status: app.status || 'unknown',
+        last_check_time: app.last_check_time || null,
+        created_at: now,
+        updated_at: now,
+        metadata: app.metadata ? JSON.stringify(app.metadata) : '',
+        tags: app.tags || [],
+        sla_target: app.sla_target || 99.9,
+        active: app.active !== false
+      }], 'JSONEachRow');
 
       return { ...app, id, created_at: now, updated_at: now };
     } catch (error) {
@@ -190,12 +184,7 @@ class ApplicationRegistryService {
         ORDER BY team, namespace, name
       `;
 
-      const result = await clickHouseService.client.query({
-        query,
-        format: 'JSONEachRow'
-      });
-
-      const applications = await result.json();
+      const applications = await clickHouseService.query(query, 'JSONEachRow');
       
       // Parse metadata JSON strings
       return applications.map((app: any) => ({
@@ -219,12 +208,7 @@ class ApplicationRegistryService {
         LIMIT 1
       `;
 
-      const result = await clickHouseService.client.query({
-        query,
-        format: 'JSONEachRow'
-      });
-
-      const applications = await result.json();
+      const applications = await clickHouseService.query(query, 'JSONEachRow');
       
       if (applications.length === 0) {
         return null;
@@ -262,14 +246,10 @@ class ApplicationRegistryService {
     };
 
     try {
-      await clickHouseService.client.insert({
-        table: 'appsentry.applications',
-        values: [{
-          ...updated,
-          metadata: updated.metadata ? JSON.stringify(updated.metadata) : ''
-        }],
-        format: 'JSONEachRow'
-      });
+      await clickHouseService.insert('appsentry.applications', [{
+        ...updated,
+        metadata: updated.metadata ? JSON.stringify(updated.metadata) : ''
+      }], 'JSONEachRow');
 
       return updated;
     } catch (error) {
@@ -288,21 +268,17 @@ class ApplicationRegistryService {
     await this.initialize();
 
     try {
-      await clickHouseService.client.insert({
-        table: 'appsentry.health_checks',
-        values: [{
-          id: healthCheck.id || uuidv4(),
-          application_id: healthCheck.application_id,
-          check_time: healthCheck.check_time || new Date(),
-          status: healthCheck.status,
-          response_time_ms: healthCheck.response_time_ms,
-          status_code: healthCheck.status_code || 0,
-          error_message: healthCheck.error_message || '',
-          details: healthCheck.details ? JSON.stringify(healthCheck.details) : '',
-          check_type: healthCheck.check_type || 'http'
-        }],
-        format: 'JSONEachRow'
-      });
+      await clickHouseService.insert('appsentry.health_checks', [{
+        id: healthCheck.id || uuidv4(),
+        application_id: healthCheck.application_id,
+        check_time: healthCheck.check_time || new Date(),
+        status: healthCheck.status,
+        response_time_ms: healthCheck.response_time_ms,
+        status_code: healthCheck.status_code || 0,
+        error_message: healthCheck.error_message || '',
+        details: healthCheck.details ? JSON.stringify(healthCheck.details) : '',
+        check_type: healthCheck.check_type || 'http'
+      }], 'JSONEachRow');
 
       // Update application status
       await this.updateApplication(healthCheck.application_id, {
@@ -336,12 +312,7 @@ class ApplicationRegistryService {
         LIMIT ${limit}
       `;
 
-      const result = await clickHouseService.client.query({
-        query,
-        format: 'JSONEachRow'
-      });
-
-      const healthChecks = await result.json();
+      const healthChecks = await clickHouseService.query(query, 'JSONEachRow');
       
       return healthChecks.map((check: any) => ({
         ...check,
@@ -382,12 +353,7 @@ class ApplicationRegistryService {
           AND check_time >= now() - INTERVAL ${periodInterval}
       `;
 
-      const result = await clickHouseService.client.query({
-        query,
-        format: 'JSONEachRow'
-      });
-
-      const data = await result.json();
+      const data = await clickHouseService.query(query, 'JSONEachRow');
       
       if (data.length === 0) {
         return {

@@ -423,6 +423,46 @@ class ClickHouseService {
       logger.error('Error closing ClickHouse client', { error });
     }
   }
+
+  // Generic query method for raw SQL execution
+  async query(sql: string, format: 'JSONEachRow' | 'JSON' = 'JSONEachRow'): Promise<any> {
+    try {
+      const result = await this.client.query({
+        query: sql,
+        format
+      });
+      return await result.json();
+    } catch (error) {
+      logger.error('Failed to execute ClickHouse query', { error, sql });
+      throw error;
+    }
+  }
+
+  // Generic exec method for DDL statements
+  async exec(sql: string): Promise<void> {
+    try {
+      await this.client.exec({
+        query: sql
+      });
+    } catch (error) {
+      logger.error('Failed to execute ClickHouse DDL', { error, sql });
+      throw error;
+    }
+  }
+
+  // Generic insert method
+  async insert(table: string, values: any[], format: string = 'JSONEachRow'): Promise<void> {
+    try {
+      await this.client.insert({
+        table,
+        values,
+        format
+      });
+    } catch (error) {
+      logger.error('Failed to insert into ClickHouse', { error, table });
+      throw error;
+    }
+  }
 }
 
 export const clickHouseService = new ClickHouseService();
