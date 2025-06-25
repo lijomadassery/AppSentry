@@ -58,7 +58,7 @@ spec:
         
         # Database Configuration
         - name: DATABASE_URL
-          value: "mysql://appsentry:appsentry456@mysql.appsentry.svc.cluster.local:3306/appsentry"
+          value: "mysql://appsentry:appsentry456@mysql:3306/appsentry"
         
         # ClickHouse Configuration
         - name: CLICKHOUSE_HOST

@@ -52,7 +52,7 @@ spec:
         - name: PORT
           value: "3000"
         - name: REACT_APP_API_URL
-          value: "http://appsentry-backend:3001"
+          value: "/api"
         
         resources:
           requests:
@@ -99,11 +99,26 @@ kind: Ingress
 metadata:
   name: appsentry-ingress
   namespace: appsentry
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - host: appsentry.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: appsentry-backend
+            port:
+              number: 3001
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: appsentry-frontend
+            port:
+              number: 3000
+  - host: localhost
     http:
       paths:
       - path: /api
