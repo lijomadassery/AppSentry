@@ -265,7 +265,7 @@ class HealthCheckService {
     try {
       const query = `
         SELECT id, name, health_check_url, health_check_interval, 
-               health_check_timeout, active as enabled
+               30 as health_check_timeout, active as enabled
         FROM appsentry.applications 
         WHERE active = true AND health_check_url != ''
       `;
@@ -355,7 +355,7 @@ class HealthCheckService {
     try {
       // Get application details
       const query = `
-        SELECT id, name, health_check_url, health_check_timeout
+        SELECT id, name, health_check_url, 30 as health_check_timeout
         FROM appsentry.applications 
         WHERE id = '${applicationId}' AND active = true
       `;

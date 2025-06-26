@@ -58,7 +58,7 @@ class KubernetesService {
           [] as conditions
         FROM otel.metrics_gauge 
         WHERE ResourceAttributes['k8s.node.name'] != '' 
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         ORDER BY name
       `;
 
@@ -70,7 +70,7 @@ class KubernetesService {
         FROM otel.metrics_gauge 
         WHERE ResourceAttributes['k8s.pod.name'] != '' 
         AND ResourceAttributes['k8s.namespace.name'] != ''
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         ORDER BY namespace, name
       `;
 
@@ -82,7 +82,7 @@ class KubernetesService {
         FROM otel.metrics_gauge 
         WHERE ResourceAttributes['service.name'] != '' 
         AND ResourceAttributes['k8s.namespace.name'] != ''
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         ORDER BY namespace, name
       `;
 
@@ -114,7 +114,7 @@ class KubernetesService {
         FROM otel.metrics_gauge 
         WHERE ResourceAttributes['k8s.namespace.name'] = '${namespace}'
         AND ResourceAttributes['k8s.pod.name'] != '' 
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         ORDER BY name
       `;
 
@@ -138,7 +138,7 @@ class KubernetesService {
           FROM otel.metrics_gauge 
           WHERE ResourceAttributes['k8s.namespace.name'] = '${namespace}'
           AND ResourceAttributes['k8s.pod.name'] LIKE '${name}%'
-          AND Timestamp >= now() - INTERVAL 5 MINUTE
+          AND TimeUnix >= now() - INTERVAL 5 MINUTE
         )
       `;
 
@@ -171,7 +171,7 @@ class KubernetesService {
         FROM otel.metrics_gauge 
         WHERE ResourceAttributes['k8s.node.name'] != '' 
         AND MetricName LIKE '%cpu%'
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         GROUP BY ResourceAttributes['k8s.node.name']
         ORDER BY name
       `;
@@ -217,7 +217,7 @@ class KubernetesService {
         WHERE ResourceAttributes['k8s.pod.name'] != '' 
         AND ResourceAttributes['k8s.namespace.name'] != ''
         ${namespaceFilter}
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         GROUP BY 
           ResourceAttributes['k8s.pod.name'],
           ResourceAttributes['k8s.namespace.name'],
@@ -258,7 +258,7 @@ class KubernetesService {
         WHERE ResourceAttributes['service.name'] != '' 
         AND ResourceAttributes['k8s.namespace.name'] != ''
         ${namespaceFilter}
-        AND Timestamp >= now() - INTERVAL 5 MINUTE
+        AND TimeUnix >= now() - INTERVAL 5 MINUTE
         GROUP BY 
           ResourceAttributes['k8s.namespace.name'],
           ResourceAttributes['service.name']
