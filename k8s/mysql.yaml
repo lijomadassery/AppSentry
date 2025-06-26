@@ -82,10 +82,10 @@ spec:
           mountPath: /docker-entrypoint-initdb.d
         resources:
           requests:
-            memory: "512Mi"
+            memory: "768Mi"
             cpu: "250m"
           limits:
-            memory: "1Gi"
+            memory: "1.5Gi"
             cpu: "500m"
         livenessProbe:
           exec:
@@ -94,8 +94,10 @@ spec:
             - ping
             - -h
             - localhost
-          initialDelaySeconds: 30
-          periodSeconds: 10
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
         readinessProbe:
           exec:
             command:
@@ -108,8 +110,10 @@ spec:
             - appsentry
             - -e
             - "SELECT 1"
-          initialDelaySeconds: 10
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
       volumes:
       - name: mysql-storage
         persistentVolumeClaim:
