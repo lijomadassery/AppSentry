@@ -10,7 +10,7 @@ metadata:
   name: otel-collector
 rules:
 - apiGroups: [""]
-  resources: ["pods", "namespaces", "nodes", "services", "endpoints", "events"]
+  resources: ["pods", "namespaces", "nodes", "services", "endpoints", "events", "replicationcontrollers", "resourcequotas"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["apps"]
   resources: ["replicasets", "deployments", "daemonsets", "statefulsets"]

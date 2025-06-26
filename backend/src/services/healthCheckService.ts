@@ -217,8 +217,8 @@ class HealthCheckService {
   private async storeHealthCheckResult(result: HealthCheckResult): Promise<void> {
     try {
       const query = `
-        INSERT INTO health_checks (
-          application_id, status, response_time_ms, timestamp, 
+        INSERT INTO appsentry.health_checks (
+          application_id, status, response_time_ms, check_time, 
           status_code, error_message, details
         ) VALUES (
           '${result.applicationId}', '${result.status}', ${result.responseTime}, 
@@ -245,11 +245,10 @@ class HealthCheckService {
     try {
       const lastHealthCheck = new Date().toISOString();
       const query = `
-        ALTER TABLE applications 
+        ALTER TABLE appsentry.applications 
         UPDATE 
-          last_health_check = '${lastHealthCheck}',
-          current_status = '${status}'
-          ${errorMessage ? `, error_message = '${this.escapeString(errorMessage)}'` : ''}
+          last_check_time = '${lastHealthCheck}',
+          status = '${status}'
         WHERE id = '${applicationId}'
       `;
 
@@ -266,13 +265,13 @@ class HealthCheckService {
     try {
       const query = `
         SELECT id, name, health_check_url, health_check_interval, 
-               health_check_timeout, enabled
-        FROM applications 
-        WHERE enabled = true AND health_check_url != ''
+               health_check_timeout, active as enabled
+        FROM appsentry.applications 
+        WHERE active = true AND health_check_url != ''
       `;
 
       const result = await clickHouseService.query(query);
-      return result.data || [];
+      return result || [];
     } catch (error) {
       logger.error('Failed to get registered applications:', error);
       return [];
@@ -288,20 +287,20 @@ class HealthCheckService {
   ): Promise<HealthCheckResult[]> {
     try {
       const query = `
-        SELECT application_id, status, response_time_ms, timestamp, 
+        SELECT application_id, status, response_time_ms, check_time, 
                status_code, error_message, details
-        FROM health_checks 
+        FROM appsentry.health_checks 
         WHERE application_id = '${applicationId}'
-        ORDER BY timestamp DESC 
+        ORDER BY check_time DESC 
         LIMIT ${limit}
       `;
 
       const result = await clickHouseService.query(query);
-      return (result.data || []).map((row: any) => ({
+      return (result || []).map((row: any) => ({
         applicationId: row.application_id,
         status: row.status,
         responseTime: row.response_time_ms,
-        timestamp: new Date(row.timestamp),
+        timestamp: new Date(row.check_time),
         statusCode: row.status_code || undefined,
         errorMessage: row.error_message || undefined,
         details: row.details ? JSON.parse(row.details) : undefined
@@ -323,17 +322,17 @@ class HealthCheckService {
   }> {
     try {
       const query = `
-        SELECT current_status, COUNT(*) as count
-        FROM applications 
-        WHERE enabled = true
-        GROUP BY current_status
+        SELECT status, COUNT(*) as count
+        FROM appsentry.applications 
+        WHERE active = true
+        GROUP BY status
       `;
 
       const result = await clickHouseService.query(query);
       const summary = { total: 0, healthy: 0, unhealthy: 0, unknown: 0 };
 
-      (result.data || []).forEach((row: any) => {
-        const status = row.current_status || 'unknown';
+      (result || []).forEach((row: any) => {
+        const status = row.status || 'unknown';
         const count = parseInt(row.count, 10);
         
         summary.total += count;
@@ -357,12 +356,12 @@ class HealthCheckService {
       // Get application details
       const query = `
         SELECT id, name, health_check_url, health_check_timeout
-        FROM applications 
-        WHERE id = '${applicationId}' AND enabled = true
+        FROM appsentry.applications 
+        WHERE id = '${applicationId}' AND active = true
       `;
 
       const result = await clickHouseService.query(query);
-      const app = result.data?.[0];
+      const app = result?.[0];
 
       if (!app || !app.health_check_url) {
         throw new Error('Application not found or health check URL not configured');
