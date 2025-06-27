@@ -307,6 +307,70 @@ const MetricsPage: React.FC = () => {
     }
   };
 
+  // Group metrics by category
+  const groupMetricsByCategory = (metrics: MetricChart[]) => {
+    const categories = {
+      performance: {
+        title: "Performance Metrics",
+        icon: <TrendingUp size={20} />,
+        metrics: metrics.filter(m => m.title.toLowerCase().includes('cpu') || 
+                                    m.title.toLowerCase().includes('response') ||
+                                    m.title.toLowerCase().includes('duration') ||
+                                    m.title.toLowerCase().includes('latency'))
+      },
+      system: {
+        title: "System Resources",
+        icon: <Cpu size={20} />,
+        metrics: metrics.filter(m => m.title.toLowerCase().includes('memory') || 
+                                    m.title.toLowerCase().includes('disk') ||
+                                    m.title.toLowerCase().includes('filesystem') ||
+                                    m.title.toLowerCase().includes('utilization'))
+      },
+      network: {
+        title: "Network & Traffic",
+        icon: <Network size={20} />,
+        metrics: metrics.filter(m => m.title.toLowerCase().includes('network') || 
+                                    m.title.toLowerCase().includes('request') ||
+                                    m.title.toLowerCase().includes('connection') ||
+                                    m.title.toLowerCase().includes('traffic'))
+      },
+      application: {
+        title: "Application Metrics",
+        icon: <HardDrive size={20} />,
+        metrics: metrics.filter(m => !m.title.toLowerCase().includes('cpu') &&
+                                    !m.title.toLowerCase().includes('memory') &&
+                                    !m.title.toLowerCase().includes('network') &&
+                                    !m.title.toLowerCase().includes('disk') &&
+                                    !m.title.toLowerCase().includes('response') &&
+                                    !m.title.toLowerCase().includes('duration'))
+      }
+    };
+
+    // Remove empty categories
+    Object.keys(categories).forEach(key => {
+      if (categories[key as keyof typeof categories].metrics.length === 0) {
+        delete categories[key as keyof typeof categories];
+      }
+    });
+
+    return categories;
+  };
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  
+  const toggleCategory = (category: string) => {
+    const newCollapsed = new Set(collapsedCategories);
+    if (newCollapsed.has(category)) {
+      newCollapsed.delete(category);
+    } else {
+      newCollapsed.add(category);
+    }
+    setCollapsedCategories(newCollapsed);
+  };
+
+  const categorizedMetrics = groupMetricsByCategory(metrics);
+
   return (
     <div className="metrics-page">
       <div className="metrics-header">
@@ -384,8 +448,9 @@ const MetricsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Key Metrics Summary */}
       <div className="metrics-summary">
-        {summaryMetrics.map((metric, index) => (
+        {summaryMetrics.slice(0, 6).map((metric, index) => (
           <div key={index} className="summary-card">
             <div className="summary-header">
               <span className="summary-name">{metric.name}</span>
@@ -401,21 +466,85 @@ const MetricsPage: React.FC = () => {
         ))}
       </div>
 
-      <div className="metrics-grid">
-        {metrics.map((metric) => (
-          <div key={metric.id} className="metric-card">
-            <div className="metric-header">
-              <h3>{metric.title}</h3>
-              <button className="metric-options">
-                <ChevronDown size={16} />
-              </button>
-            </div>
-            <div className="metric-chart">
-              {renderChart(metric)}
-            </div>
-          </div>
+      {/* Category Tabs */}
+      <div className="category-tabs">
+        <button 
+          className={`category-tab ${selectedCategory === 'all' ? 'active' : ''}`}
+          onClick={() => setSelectedCategory('all')}
+        >
+          All Metrics ({metrics.length})
+        </button>
+        {Object.entries(categorizedMetrics).map(([key, category]) => (
+          <button 
+            key={key}
+            className={`category-tab ${selectedCategory === key ? 'active' : ''}`}
+            onClick={() => setSelectedCategory(key)}
+          >
+            {category.icon}
+            {category.title} ({category.metrics.length})
+          </button>
         ))}
       </div>
+
+      {/* Metrics Display */}
+      {selectedCategory === 'all' ? (
+        <div className="metrics-categories">
+          {Object.entries(categorizedMetrics).map(([key, category]) => (
+            <div key={key} className="metrics-category">
+              <div 
+                className="category-header"
+                onClick={() => toggleCategory(key)}
+              >
+                {category.icon}
+                <h2>{category.title}</h2>
+                <span className="metric-count">({category.metrics.length} metrics)</span>
+                <ChevronDown 
+                  size={20} 
+                  className={`chevron ${collapsedCategories.has(key) ? 'collapsed' : ''}`}
+                />
+              </div>
+              
+              {!collapsedCategories.has(key) && (
+                <div className="metrics-grid">
+                  {category.metrics.map((metric) => (
+                    <div key={metric.id} className="metric-card">
+                      <div className="metric-header">
+                        <h3>{metric.title}</h3>
+                      </div>
+                      <div className="metric-chart">
+                        {renderChart(metric)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="metrics-grid">
+          {categorizedMetrics[selectedCategory as keyof typeof categorizedMetrics]?.metrics.map((metric) => (
+            <div key={metric.id} className="metric-card">
+              <div className="metric-header">
+                <h3>{metric.title}</h3>
+              </div>
+              <div className="metric-chart">
+                {renderChart(metric)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {metrics.length === 0 && !loading && (
+        <div className="no-metrics">
+          <div className="no-metrics-content">
+            <MemoryStick size={48} />
+            <h3>No Metrics Available</h3>
+            <p>No metrics data found for the selected filters. Try adjusting your time range or service selection.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
