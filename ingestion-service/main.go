@@ -529,6 +529,14 @@ func (h *ConsumerGroupHandler) attributesToJSON(attributes []*commonv1.KeyValue)
 	return string(result)
 }
 
+func parseLabelsToMap(labelsJSON string) map[string]string {
+	attrs := make(map[string]string)
+	if labelsJSON != "" {
+		json.Unmarshal([]byte(labelsJSON), &attrs)
+	}
+	return attrs
+}
+
 func (s *IngestionService) writeTraces(traces []TraceRecord) error {
 	ctx := context.Background()
 	batch, err := s.clickhouse.PrepareBatch(ctx, "INSERT INTO otel.traces")
@@ -605,7 +613,7 @@ func (s *IngestionService) writeMetrics(metrics []MetricRecord) error {
 				metric.MetricName,                  // MetricName
 				"",                                 // MetricDescription
 				"",                                 // MetricUnit
-				map[string]string{},                // Attributes
+				parseLabelsToMap(metric.Labels),    // Attributes
 				metric.Timestamp,                   // StartTimeUnix
 				metric.Timestamp,                   // TimeUnix
 				metric.Value,                       // Value
@@ -645,7 +653,7 @@ func (s *IngestionService) writeMetrics(metrics []MetricRecord) error {
 				metric.MetricName,                  // MetricName
 				"",                                 // MetricDescription
 				"",                                 // MetricUnit
-				map[string]string{},                // Attributes
+				parseLabelsToMap(metric.Labels),    // Attributes
 				metric.Timestamp,                   // StartTimeUnix
 				metric.Timestamp,                   // TimeUnix
 				metric.Value,                       // Value
