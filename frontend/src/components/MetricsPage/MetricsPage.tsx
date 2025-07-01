@@ -134,8 +134,8 @@ const MetricsPage: React.FC = () => {
     return teamMatch && envMatch;
   });
 
-  const teams = [...new Set(applications.map(app => app.team))];
-  const environments = [...new Set(applications.map(app => app.environment))];
+  const teams = Array.from(new Set(applications.map(app => app.team)));
+  const environments = Array.from(new Set(applications.map(app => app.environment)));
 
   const renderStatusIcon = (status: string) => {
     switch (status) {
