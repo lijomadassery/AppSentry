@@ -12,7 +12,8 @@ datasource db {
 
 enum UserRole {
   admin
-  editor
+  team_lead
+  developer
   viewer
 }
 
@@ -22,56 +23,10 @@ enum Environment {
   production
 }
 
-enum TriggerType {
-  manual
-  scheduled
-  webhook
-  ci_cd
-}
-
-enum TestRunStatus {
-  pending
-  running
-  completed
-  failed
-  cancelled
-}
-
-enum TestType {
-  health_check
-  login_test
-  combined
-}
-
-enum TestStatus {
-  passed
-  failed
-  skipped
-  timeout
-}
-
-enum ReportType {
-  summary
-  sla
-  trends
-  failures
-}
-
-enum NotificationType {
-  email
-  teams
-  sms
-}
-
-enum NotificationThreshold {
-  all
-  warnings_and_errors
-  errors_only
-}
-
-enum ConfigType {
-  application
-  global
+enum HealthStatus {
+  healthy
+  degraded
+  unhealthy
 }
 
 model User {
@@ -79,8 +34,6 @@ model User {
   username     String    @unique @db.VarChar(100)
   email        String    @unique @db.VarChar(255)
   displayName  String    @map("display_name") @db.VarChar(255)
-  firstName    String?   @map("first_name") @db.VarChar(100)
-  lastName     String?   @map("last_name") @db.VarChar(100)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   role         UserRole  @default(viewer)
   isActive     Boolean   @default(true) @map("is_active")
@@ -89,15 +42,38 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  testRuns                 TestRun[]                @relation("TestRunTriggeredBy")
-  auditLogs                AuditLog[]
-  createdApplications      Application[]            @relation("ApplicationCreatedBy")
-  modifiedApplications     Application[]            @relation("ApplicationModifiedBy")
-  scheduledReports         ScheduledReport[]
-  notificationPreferences  NotificationPreference[]
-  configHistory            ConfigHistory[]
+  teams       TeamMembership[]
+  createdApplications Application[] @relation("ApplicationCreatedBy")
+  modifiedApplications Application[] @relation("ApplicationModifiedBy")
 
   @@map("users")
+}
+
+model Team {
+  id          String    @id @default(cuid()) @db.VarChar(36)
+  name        String    @unique @db.VarChar(255)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  members      TeamMembership[]
+  applications Application[]
+  
+  @@map("teams")
+}
+
+model TeamMembership {
+  userId String @map("user_id") @db.VarChar(36)
+  teamId String @map("team_id") @db.VarChar(36)
+  role   String @db.VarChar(50) // e.g., 'lead', 'member'
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+  @@map("team_memberships")
 }
 
 model Application {
@@ -106,13 +82,8 @@ model Application {
   displayName     String      @map("display_name") @db.VarChar(255)
   description     String?     @db.Text
   environment     Environment
-  category        String      @db.VarChar(50)
   healthUrl       String      @map("health_url") @db.VarChar(500)
-  loginUrl        String?     @map("login_url") @db.VarChar(500)
-  config          Json
-  ownerTeam       String?     @map("owner_team") @db.VarChar(100)
-  ownerEmail      String?     @map("owner_email") @db.VarChar(255)
-  tags            Json?
+  teamId          String?     @map("team_id") @db.VarChar(36)
   isActive        Boolean     @default(true) @map("is_active")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
@@ -120,166 +91,28 @@ model Application {
   lastModifiedBy  String      @map("last_modified_by") @db.VarChar(36)
 
   // Relations
-  creator                  User                     @relation("ApplicationCreatedBy", fields: [createdBy], references: [id])
-  lastModifier             User                     @relation("ApplicationModifiedBy", fields: [lastModifiedBy], references: [id])
-  testResults              TestResult[]
-  healthMetrics            HealthMetric[]
-  notificationPreferences  NotificationPreference[]
+  creator         User          @relation("ApplicationCreatedBy", fields: [createdBy], references: [id])
+  lastModifier    User          @relation("ApplicationModifiedBy", fields: [lastModifiedBy], references: [id])
+  team            Team?         @relation(fields: [teamId], references: [id])
+  healthChecks    HealthCheck[]
 
   @@index([environment])
-  @@index([category])
   @@index([isActive])
   @@map("applications")
 }
 
-model TestRun {
-  id                String        @id @default(cuid()) @db.VarChar(36)
-  triggerType       TriggerType   @map("trigger_type")
-  triggerSource     String?       @map("trigger_source") @db.VarChar(255)
-  triggeredBy       String?       @map("triggered_by") @db.VarChar(36)
-  applications      Json          // Array of application IDs being tested
-  startedAt         DateTime      @default(now()) @map("started_at")
-  completedAt       DateTime?     @map("completed_at")
-  status            TestRunStatus
-  progressCompleted Int           @default(0) @map("progress_completed")
-  progressTotal     Int           @default(0) @map("progress_total")
-  summary           Json?
-  errorMessage      String?       @map("error_message") @db.Text
+model HealthCheck {
+  id            String       @id @default(cuid()) @db.VarChar(36)
+  applicationId String       @map("application_id") @db.VarChar(36)
+  status        HealthStatus
+  responseTime  Int?         @map("response_time_ms")
+  details       Json?
+  timestamp     DateTime     @default(now())
 
   // Relations
-  user        User?        @relation("TestRunTriggeredBy", fields: [triggeredBy], references: [id])
-  testResults TestResult[]
-
-  @@index([status])
-  @@index([startedAt])
-  @@index([triggerType])
-  @@map("test_runs")
-}
-
-model TestResult {
-  id               BigInt     @id @default(autoincrement())
-  testRunId        String     @map("test_run_id") @db.VarChar(36)
-  applicationId    String     @map("application_id") @db.VarChar(36)
-  testType         TestType   @map("test_type")
-  status           TestStatus
-  durationMs       Int?       @map("duration_ms")
-  responseData     Json?      @map("response_data")
-  errorMessage     String?    @map("error_message") @db.Text
-  errorStack       String?    @map("error_stack") @db.Text
-  screenshotUrl    String?    @map("screenshot_url") @db.VarChar(500)
-  logsUrl          String?    @map("logs_url") @db.VarChar(500)
-  healthCheckData  Json?      @map("health_check_data")
-  loginTestData    Json?      @map("login_test_data")
-  startedAt        DateTime   @default(now()) @map("started_at")
-  completedAt      DateTime?  @map("completed_at")
-
-  // Relations
-  testRun     TestRun     @relation(fields: [testRunId], references: [id], onDelete: Cascade)
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  @@index([testRunId])
   @@index([applicationId])
-  @@index([status])
-  @@index([startedAt])
-  @@index([applicationId, startedAt])
-  @@map("test_results")
-}
-
-model HealthMetric {
-  id                 BigInt      @id @default(autoincrement())
-  applicationId      String      @map("application_id") @db.VarChar(36)
-  date               DateTime    @db.Date
-  hour               Int         @db.TinyInt // 0-23
-  totalTests         Int         @default(0) @map("total_tests")
-  passedTests        Int         @default(0) @map("passed_tests")
-  failedTests        Int         @default(0) @map("failed_tests")
-  avgResponseTimeMs  Decimal?    @map("avg_response_time_ms") @db.Decimal(10, 2)
-  maxResponseTimeMs  Int?        @map("max_response_time_ms")
-  minResponseTimeMs  Int?        @map("min_response_time_ms")
-  uptimePercentage   Decimal?    @map("uptime_percentage") @db.Decimal(5, 2)
-  createdAt          DateTime    @default(now()) @map("created_at")
-
-  // Relations
-  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-
-  @@unique([applicationId, date, hour])
-  @@index([date])
-  @@index([applicationId, date])
-  @@map("health_metrics")
-}
-
-model ScheduledReport {
-  id           String     @id @default(cuid()) @db.VarChar(36)
-  name         String     @db.VarChar(255)
-  reportType   ReportType @map("report_type")
-  scheduleCron String     @map("schedule_cron") @db.VarChar(100)
-  recipients   Json       // Array of email addresses
-  filters      Json?
-  isActive     Boolean    @default(true) @map("is_active")
-  lastRun      DateTime?  @map("last_run")
-  nextRun      DateTime?  @map("next_run")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  createdBy    String     @map("created_by") @db.VarChar(36)
-
-  // Relations
-  creator User @relation(fields: [createdBy], references: [id])
-
-  @@index([nextRun])
-  @@index([isActive])
-  @@map("scheduled_reports")
-}
-
-model AuditLog {
-  id           BigInt   @id @default(autoincrement())
-  userId       String   @map("user_id") @db.VarChar(36)
-  action       String   @db.VarChar(100)
-  resourceType String   @map("resource_type") @db.VarChar(50)
-  resourceId   String?  @map("resource_id") @db.VarChar(36)
-  details      Json?
-  ipAddress    String?  @map("ip_address") @db.VarChar(45)
-  userAgent    String?  @map("user_agent") @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-model NotificationPreference {
-  id               String                @id @default(cuid()) @db.VarChar(36)
-  userId           String                @map("user_id") @db.VarChar(36)
-  applicationId    String?               @map("application_id") @db.VarChar(36)
-  notificationType NotificationType      @map("notification_type")
-  enabled          Boolean               @default(true)
-  threshold        NotificationThreshold @default(errors_only)
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
-
-  // Relations
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  application Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, applicationId, notificationType])
-  @@map("notification_preferences")
-}
-
-model ConfigHistory {
-  id                BigInt     @id @default(autoincrement())
-  configType        ConfigType @map("config_type")
-  resourceId        String?    @map("resource_id") @db.VarChar(36) // application ID for app configs, NULL for global
-  configData        Json       @map("config_data")
-  changedBy         String     @map("changed_by") @db.VarChar(36)
-  changeDescription String?    @map("change_description") @db.Text
-  createdAt         DateTime   @default(now()) @map("created_at")
-
-  // Relations
-  user User @relation(fields: [changedBy], references: [id])
-
-  @@index([configType, resourceId])
-  @@index([createdAt])
-  @@map("config_history")
+  @@index([timestamp])
+  @@map("health_checks")
 }

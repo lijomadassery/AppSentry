@@ -15,19 +15,6 @@ const envSchema = Joi.object({
   // Database (MySQL)
   DATABASE_URL: Joi.string().required(),
 
-  // ClickHouse (for observability platform)
-  CLICKHOUSE_HOST: Joi.string().default('localhost'),
-  CLICKHOUSE_PORT: Joi.number().default(8123),
-  CLICKHOUSE_DATABASE: Joi.string().default('otel'),
-  CLICKHOUSE_USERNAME: Joi.string().default('default'),
-  CLICKHOUSE_PASSWORD: Joi.string().allow('').default(''),
-
-  // OpenTelemetry
-  OTEL_EXPORTER_OTLP_ENDPOINT: Joi.string().default('http://localhost:3001/api/otel'),
-  OTEL_SERVICE_NAME: Joi.string().default('AppSentry Backend'),
-  OTEL_SERVICE_VERSION: Joi.string().default('1.0.0'),
-  OTEL_DEPLOYMENT_ENVIRONMENT: Joi.string().default('development'),
-
   // JWT Authentication (required)
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRES_IN: Joi.string().default('1h'),
@@ -58,23 +45,6 @@ export const config = {
   // Database configuration
   database: {
     url: envVars.DATABASE_URL,
-  },
-  
-  // ClickHouse configuration for observability platform
-  clickhouse: {
-    host: envVars.CLICKHOUSE_HOST,
-    port: envVars.CLICKHOUSE_PORT,
-    database: envVars.CLICKHOUSE_DATABASE,
-    username: envVars.CLICKHOUSE_USERNAME,
-    password: envVars.CLICKHOUSE_PASSWORD,
-  },
-  
-  // OpenTelemetry configuration
-  otel: {
-    endpoint: envVars.OTEL_EXPORTER_OTLP_ENDPOINT,
-    serviceName: envVars.OTEL_SERVICE_NAME,
-    serviceVersion: envVars.OTEL_SERVICE_VERSION,
-    environment: envVars.OTEL_DEPLOYMENT_ENVIRONMENT,
   },
   
   // JWT Authentication

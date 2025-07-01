@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: ingestion-service
-        image: docker.io/lijomadassery/appsentry-ingestion-service:latest
+        image: docker.io/lijomadassery/appsentry-ingestion:v1.4
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

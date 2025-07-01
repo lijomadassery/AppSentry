@@ -1,5 +1,5 @@
 import express from 'express';
-import { applicationRegistryService } from '../services/applicationRegistryService';
+import { prisma } from '../database/prisma';
 import { kubernetesService } from '../services/kubernetesService';
 import { logger } from '../utils/logger';
 
@@ -14,7 +14,9 @@ router.get('/overview', async (req, res) => {
       source: 'api_request'
     });
     
-    const applications = await applicationRegistryService.getApplications({ active: true });
+    const applications = await prisma.application.findMany({ 
+      where: { active: true } 
+    });
     
     // Calculate overall platform health
     const totalApps = applications.length;
@@ -52,7 +54,9 @@ router.get('/overview', async (req, res) => {
 // Get team summary
 router.get('/teams', async (req, res) => {
   try {
-    const applications = await applicationRegistryService.getApplications({ active: true });
+    const applications = await prisma.application.findMany({ 
+      where: { active: true } 
+    });
     
     // Group applications by team
     const teamGroups = applications.reduce((acc, app) => {
@@ -217,10 +221,10 @@ router.get('/k8s/pods/enhanced', async (req, res) => {
       status: pod.status,
       cpuUsage: Math.floor(Math.random() * 80 + 10), // Simulated until metrics-server available
       memoryUsage: Math.floor(Math.random() * 70 + 20),
-      cpuLimit: 0, // From ClickHouse data
-      cpuRequest: 0, // From ClickHouse data
-      memoryLimit: 0, // From ClickHouse data
-      memoryRequest: 0, // From ClickHouse data
+      cpuLimit: 0, // To be implemented with metrics collection
+      cpuRequest: 0, // To be implemented with metrics collection
+      memoryLimit: 0, // To be implemented with metrics collection
+      memoryRequest: 0, // To be implemented with metrics collection
       networkIORate: Math.floor(Math.random() * 500000 + 50000), // Simulated
       filesystemUsage: Math.floor(Math.random() * 40 + 10),
       restartCount: pod.restarts,
@@ -229,8 +233,8 @@ router.get('/k8s/pods/enhanced', async (req, res) => {
 
     res.json({
       pods,
-      deployments: [], // Not available from ClickHouse data yet
-      nodeStats: [], // Not available from ClickHouse data yet
+      deployments: [], // To be implemented with K8s metrics
+      nodeStats: [], // To be implemented with K8s metrics
       timestamp: new Date().toISOString()
     });
   } catch (error) {

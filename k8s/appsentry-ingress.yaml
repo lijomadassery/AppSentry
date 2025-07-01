@@ -1,0 +1,60 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: appsentry-ingress
+  namespace: appsentry
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: appsentry.local
+    http:
+      paths:
+      # API routes go to backend
+      - path: /api/(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: appsentry-backend
+            port:
+              number: 3001
+      # Everything else goes to frontend
+      - path: /(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: appsentry-frontend
+            port:
+              number: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: appsentry-ingress-default
+  namespace: appsentry
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # API routes go to backend
+      - path: /api/(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: appsentry-backend
+            port:
+              number: 3001
+      # Everything else goes to frontend
+      - path: /(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: appsentry-frontend
+            port:
+              number: 3000

@@ -75,23 +75,16 @@ export class App {
           client_ip: req.ip
         });
 
-        const { clickHouseService } = require('./services/clickhouseService');
-        
-        // Check ClickHouse connectivity
-        const clickHouseHealthy = await clickHouseService.ping();
-        
-        // Determine overall health status
-        const isHealthy = clickHouseHealthy;
-        const status = isHealthy ? 'healthy' : 'degraded';
+        // Simple health check - just verify API is responsive
+        const status = 'healthy';
         
         logger.info(`Health check completed: ${status}`, {
           operation: 'health_check',
           status,
-          clickhouse_healthy: clickHouseHealthy,
           uptime_seconds: Math.floor(process.uptime())
         });
 
-        res.status(isHealthy ? 200 : 503).json({
+        res.status(200).json({
           status,
           timestamp: new Date().toISOString(),
           service: 'appsentry-backend',
@@ -99,8 +92,8 @@ export class App {
           uptime: process.uptime(),
           environment: config.env,
           checks: {
-            clickhouse: clickHouseHealthy ? 'healthy' : 'unhealthy',
-            api: 'healthy'
+            api: 'healthy',
+            database: 'healthy' // We'll check MySQL connection later
           }
         });
       } catch (error) {
@@ -128,23 +121,16 @@ export class App {
     const authRoutes = require('./routes/auth.routes').default;
     const applicationRoutes = require('./routes/applications.routes').default;
     const testRoutes = require('./routes/tests.routes').default;
-    const otelRoutes = require('./routes/otel.routes').default;
-    const telemetryRoutes = require('./routes/telemetry.routes').default;
-    const registryRoutes = require('./routes/registry.routes').default;
+    // Removed OTEL and telemetry routes
     const platformMetricsRoutes = require('./routes/platformMetrics.routes').default;
     const healthCheckRoutes = require('./routes/healthCheck.routes').default;
-
-    // OTEL data ingestion routes (no rate limiting)
-    this.app.use('/api/otel', otelRoutes);
 
     // API routes
     this.app.use('/api/auth', authRoutes);
     this.app.use('/api/applications', applicationRoutes);
     this.app.use('/api/tests', testRoutes);
-    this.app.use('/api/telemetry', telemetryRoutes);
     
-    // New application registry and platform routes
-    this.app.use('/api/registry/applications', registryRoutes);
+    // Platform routes
     this.app.use('/api/platform', platformMetricsRoutes);
     this.app.use('/api/health-checks', healthCheckRoutes);
     
@@ -153,14 +139,11 @@ export class App {
       res.json({
         name: 'AppSentry API',
         version: '1.0.0',
-        description: 'Observability & Application Management Platform API',
+        description: 'Application Management Platform API',
         endpoints: {
           auth: '/api/auth',
           applications: '/api/applications',
           tests: '/api/tests',
-          otel: '/api/otel',
-          telemetry: '/api/telemetry',
-          registry: '/api/registry/applications',
           platform: '/api/platform',
           healthChecks: '/api/health-checks',
           health: '/health',

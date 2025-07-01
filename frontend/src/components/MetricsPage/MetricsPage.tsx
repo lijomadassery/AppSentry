@@ -1,175 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { 
-  TrendingUp, TrendingDown, Clock, Cpu, MemoryStick, 
-  HardDrive, Network, RefreshCw, Download, Filter,
-  Calendar, ChevronDown
+  Activity, AlertCircle, CheckCircle, Clock, RefreshCw, 
+  Filter, Calendar, ChevronDown, Users, Server
 } from 'lucide-react';
 import './MetricsPage.css';
-
-interface MetricData {
-  timestamp: string;
-  value: number;
-  service?: string;
-}
-
-interface MetricSummary {
-  name: string;
-  value: number;
-  unit: string;
-  change: number;
-  trend: 'up' | 'down' | 'stable';
-}
-
-interface MetricChart {
-  id: string;
-  title: string;
-  type: 'line' | 'area' | 'bar' | 'pie';
-  data: MetricData[];
-  unit: string;
-  color?: string;
-}
 
 interface Application {
   id: string;
   name: string;
-  service_name: string;
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  last_seen: string;
+  team: string;
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  last_check_time: string;
+  environment: string;
+  namespace: string;
+}
+
+interface HealthSummary {
+  total: number;
+  healthy: number;
+  unhealthy: number;
+  unknown: number;
+}
+
+interface TeamSummary {
+  teamName: string;
+  totalApplications: number;
+  healthyApplications: number;
+  healthPercentage: string;
+  applications: Application[];
+}
+
+interface PlatformSummary {
+  summary: HealthSummary;
+  timestamp: string;
 }
 
 const MetricsPage: React.FC = () => {
-  const [selectedTimeRange, setSelectedTimeRange] = useState('1h');
-  const [selectedService, setSelectedService] = useState('all');
-  const [selectedApplication, setSelectedApplication] = useState('all');
-  const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [metrics, setMetrics] = useState<MetricChart[]>([]);
-  const [summaryMetrics, setSummaryMetrics] = useState<MetricSummary[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [platformSummary, setPlatformSummary] = useState<PlatformSummary | null>(null);
+  const [teamStats, setTeamStats] = useState<TeamSummary[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [refreshInterval] = useState<number>(30000); // 30 seconds
+  const [selectedTeam, setSelectedTeam] = useState<string>('all');
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all');
 
-  // Generate mock time-series data
-  const generateTimeSeriesData = (points: number = 20): MetricData[] => {
-    const now = Date.now();
-    const interval = 60000; // 1 minute intervals
-    
-    return Array.from({ length: points }, (_, i) => ({
-      timestamp: new Date(now - (points - i - 1) * interval).toLocaleTimeString(),
-      value: Math.random() * 100 + Math.sin(i / 3) * 20 + 50,
-    }));
+  const statusColors = {
+    healthy: '#10b981',
+    unhealthy: '#ef4444',
+    unknown: '#6b7280'
   };
-
-  // Generate service distribution data
-  const generateServiceData = (): MetricData[] => [
-    { timestamp: 'Frontend', value: 35, service: 'appsentry-frontend' },
-    { timestamp: 'Backend', value: 45, service: 'appsentry-backend' },
-    { timestamp: 'Database', value: 15, service: 'database' },
-    { timestamp: 'Cache', value: 5, service: 'redis' },
-  ];
-
-  // Load metrics data
-  const loadMetrics = async () => {
-    setLoading(true);
-    
-    try {
-      // Fetch metrics from backend
-      const queryParams = new URLSearchParams({
-        timeRange: selectedTimeRange,
-        ...(selectedService !== 'all' && { serviceName: selectedService }),
-        ...(selectedApplication !== 'all' && { applicationName: selectedApplication }),
-        limit: '1000'
-      });
-
-      const [metricsResponse, summaryResponse] = await Promise.all([
-        fetch(`/api/otel/metrics?${queryParams}`),
-        fetch(`/api/otel/metrics/summary?timeRange=${selectedTimeRange}`)
-      ]);
-
-      const [metricsData, summaryData] = await Promise.all([
-        metricsResponse.json(),
-        summaryResponse.json()
-      ]);
-
-      if (metricsResponse.ok && summaryResponse.ok) {
-        console.log('Raw metrics data:', metricsData.metrics?.length || 0, 'metrics');
-        // Group metrics by metric name and transform to chart format
-        const metricGroups = new Map<string, MetricData[]>();
-        
-        (metricsData.metrics || []).forEach((metric: any) => {
-          const key = metric.metric_name;
-          if (!metricGroups.has(key)) {
-            metricGroups.set(key, []);
-          }
-          metricGroups.get(key)?.push({
-            timestamp: new Date(metric.timestamp.replace(' ', 'T') + 'Z').toLocaleTimeString(),
-            value: metric.value,
-            service: metric.service_name
-          });
-        });
-
-        // Transform to chart format
-        const charts: MetricChart[] = Array.from(metricGroups.entries()).map(([name, data], index) => {
-          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-          return {
-            id: name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(),
-            title: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            type: name.includes('rate') || name.includes('count') ? 'line' : 'area',
-            data: data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
-            unit: name.includes('percent') || name.includes('ratio') ? '%' : 
-                  name.includes('time') || name.includes('duration') ? 'ms' :
-                  name.includes('memory') || name.includes('bytes') ? 'MB' : '',
-            color: colors[index % colors.length]
-          };
-        });
-
-        // Transform summary data
-        const summary: MetricSummary[] = summaryData.summary.map((item: any) => ({
-          name: item.metric_name.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
-          value: item.avg_value,
-          unit: item.metric_name.includes('percent') || item.metric_name.includes('ratio') ? '%' : 
-                item.metric_name.includes('time') || item.metric_name.includes('duration') ? 'ms' :
-                item.metric_name.includes('memory') || item.metric_name.includes('bytes') ? 'MB' : '',
-          change: Math.random() * 20 - 10, // We'd need historical data to calculate real change
-          trend: Math.random() > 0.5 ? 'up' : 'down'
-        }));
-
-        setMetrics(charts);
-        setSummaryMetrics(summary);
-      } else {
-        console.error('Failed to fetch metrics');
-        // Fallback to empty data
-        setMetrics([]);
-        setSummaryMetrics([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch metrics:', error);
-      // Fallback to empty data
-      setMetrics([]);
-      setSummaryMetrics([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load applications for filtering
-  useEffect(() => {
-    loadApplications();
-  }, []);
-
-  // Auto-refresh effect
-  useEffect(() => {
-    loadMetrics();
-    
-    if (autoRefresh) {
-      const interval = setInterval(loadMetrics, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [selectedTimeRange, selectedService, selectedApplication, refreshInterval, autoRefresh]);
 
   const loadApplications = async () => {
     try {
@@ -188,360 +72,305 @@ const MetricsPage: React.FC = () => {
     }
   };
 
-  // Format number with units
-  const formatValue = (value: number, unit: string): string => {
-    if (unit === '%') return `${value.toFixed(1)}%`;
-    if (unit === 'MB') return `${value.toFixed(0)} MB`;
-    if (unit === 'GB') return `${value.toFixed(1)} GB`;
-    if (unit === 'ms') return `${value.toFixed(0)} ms`;
-    if (unit === 'req/s') return `${value.toFixed(1)} req/s`;
-    if (value > 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value > 1000) return `${(value / 1000).toFixed(1)}K`;
-    return value.toFixed(0);
-  };
-
-  // Colors for pie chart
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-
-  // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="custom-tooltip">
-          <p className="label">{label}</p>
-          <p className="value">
-            {formatValue(payload[0].value, payload[0].unit || '')}
-          </p>
-        </div>
-      );
+  const loadPlatformOverview = async () => {
+    try {
+      const response = await fetch('/api/platform/overview');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setPlatformSummary(data);
+      } else {
+        console.error('Failed to fetch platform overview:', data.error);
+      }
+    } catch (error) {
+      console.error('Failed to fetch platform overview:', error);
     }
-    return null;
   };
 
-  // Render metric chart based on type
-  const renderChart = (metric: MetricChart) => {
-    const chartProps = {
-      data: metric.data,
-      margin: { top: 5, right: 20, left: 10, bottom: 5 },
-    };
+  const loadTeamStats = async () => {
+    try {
+      const response = await fetch('/api/platform/teams');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setTeamStats(data.teams || []);
+      } else {
+        console.error('Failed to fetch team stats:', data.error);
+        setTeamStats([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch team stats:', error);
+      setTeamStats([]);
+    }
+  };
 
-    switch (metric.type) {
-      case 'line':
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart {...chartProps}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="timestamp" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip content={<CustomTooltip />} />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
-                stroke={metric.color} 
-                strokeWidth={2}
-                dot={false}
-                unit={metric.unit}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        );
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadApplications(),
+        loadPlatformOverview(),
+        loadTeamStats()
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      case 'area':
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart {...chartProps}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="timestamp" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip content={<CustomTooltip />} />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke={metric.color} 
-                fill={metric.color}
-                fillOpacity={0.3}
-                unit={metric.unit}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        );
+  useEffect(() => {
+    loadData();
+  }, []);
 
-      case 'bar':
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart {...chartProps}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="timestamp" stroke="var(--text-secondary)" />
-              <YAxis stroke="var(--text-secondary)" />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" fill={metric.color} unit={metric.unit} />
-            </BarChart>
-          </ResponsiveContainer>
-        );
+  useEffect(() => {
+    if (autoRefresh) {
+      const interval = setInterval(loadData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh, refreshInterval]);
 
-      case 'pie':
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={metric.data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={(entry) => `${entry.timestamp}: ${entry.value}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {metric.data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        );
+  const filteredApplications = applications.filter(app => {
+    const teamMatch = selectedTeam === 'all' || app.team === selectedTeam;
+    const envMatch = selectedEnvironment === 'all' || app.environment === selectedEnvironment;
+    return teamMatch && envMatch;
+  });
 
+  const teams = [...new Set(applications.map(app => app.team))];
+  const environments = [...new Set(applications.map(app => app.environment))];
+
+  const renderStatusIcon = (status: string) => {
+    switch (status) {
+      case 'healthy':
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case 'unhealthy':
+        return <AlertCircle className="w-5 h-5 text-red-500" />;
       default:
-        return null;
+        return <Clock className="w-5 h-5 text-gray-500" />;
     }
   };
 
-  // Group metrics by category
-  const groupMetricsByCategory = (metrics: MetricChart[]) => {
-    const categories = {
-      performance: {
-        title: "Performance Metrics",
-        icon: <TrendingUp size={20} />,
-        metrics: metrics.filter(m => m.title.toLowerCase().includes('cpu') || 
-                                    m.title.toLowerCase().includes('response') ||
-                                    m.title.toLowerCase().includes('duration') ||
-                                    m.title.toLowerCase().includes('latency'))
-      },
-      system: {
-        title: "System Resources",
-        icon: <Cpu size={20} />,
-        metrics: metrics.filter(m => m.title.toLowerCase().includes('memory') || 
-                                    m.title.toLowerCase().includes('disk') ||
-                                    m.title.toLowerCase().includes('filesystem') ||
-                                    m.title.toLowerCase().includes('utilization'))
-      },
-      network: {
-        title: "Network & Traffic",
-        icon: <Network size={20} />,
-        metrics: metrics.filter(m => m.title.toLowerCase().includes('network') || 
-                                    m.title.toLowerCase().includes('request') ||
-                                    m.title.toLowerCase().includes('connection') ||
-                                    m.title.toLowerCase().includes('traffic'))
-      },
-      application: {
-        title: "Application Metrics",
-        icon: <HardDrive size={20} />,
-        metrics: metrics.filter(m => !m.title.toLowerCase().includes('cpu') &&
-                                    !m.title.toLowerCase().includes('memory') &&
-                                    !m.title.toLowerCase().includes('network') &&
-                                    !m.title.toLowerCase().includes('disk') &&
-                                    !m.title.toLowerCase().includes('response') &&
-                                    !m.title.toLowerCase().includes('duration'))
-      }
-    };
-
-    // Remove empty categories
-    Object.keys(categories).forEach(key => {
-      if (categories[key as keyof typeof categories].metrics.length === 0) {
-        delete categories[key as keyof typeof categories];
-      }
-    });
-
-    return categories;
+  const getHealthPercentage = (healthy: number, total: number) => {
+    return total > 0 ? ((healthy / total) * 100).toFixed(1) : '0';
   };
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-  
-  const toggleCategory = (category: string) => {
-    const newCollapsed = new Set(collapsedCategories);
-    if (newCollapsed.has(category)) {
-      newCollapsed.delete(category);
-    } else {
-      newCollapsed.add(category);
-    }
-    setCollapsedCategories(newCollapsed);
-  };
+  const pieData = platformSummary ? [
+    { name: 'Healthy', value: platformSummary.summary.healthy, color: statusColors.healthy },
+    { name: 'Unhealthy', value: platformSummary.summary.unhealthy, color: statusColors.unhealthy },
+    { name: 'Unknown', value: platformSummary.summary.unknown, color: statusColors.unknown }
+  ] : [];
 
-  const categorizedMetrics = groupMetricsByCategory(metrics);
+  const teamHealthData = teamStats.map(team => ({
+    name: team.teamName,
+    total: team.totalApplications,
+    healthy: team.healthyApplications,
+    percentage: parseFloat(team.healthPercentage)
+  }));
 
   return (
     <div className="metrics-page">
       <div className="metrics-header">
-        <h1>Metrics Dashboard</h1>
-        <div className="metrics-controls">
-          <select 
-            value={selectedApplication} 
-            onChange={(e) => setSelectedApplication(e.target.value)}
-            className="application-select"
-          >
-            <option value="all">All Applications</option>
-            {applications.map((app) => (
-              <option key={app.id} value={app.name}>
-                {app.name}
-              </option>
-            ))}
-          </select>
-
-          <select 
-            value={selectedService} 
-            onChange={(e) => setSelectedService(e.target.value)}
-            className="service-select"
-          >
-            <option value="all">All Services</option>
-            <option value="appsentry-frontend">Frontend</option>
-            <option value="appsentry-backend">Backend</option>
-            <option value="database">Database</option>
-            <option value="redis">Redis</option>
-          </select>
-
-          <select 
-            value={selectedTimeRange} 
-            onChange={(e) => setSelectedTimeRange(e.target.value)}
-            className="time-range-select"
-          >
-            <option value="5m">Last 5 minutes</option>
-            <option value="15m">Last 15 minutes</option>
-            <option value="1h">Last 1 hour</option>
-            <option value="6h">Last 6 hours</option>
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-          </select>
-
-          <div className="auto-refresh-control">
-            <label>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-              Auto-refresh
-            </label>
-            {autoRefresh && (
+        <div className="header-left">
+          <h1 className="page-title">Application Dashboard</h1>
+          <p className="page-subtitle">Monitor and manage your applications</p>
+        </div>
+        
+        <div className="header-controls">
+          <div className="filter-group">
+            <div className="filter-item">
+              <label htmlFor="team-select">Team:</label>
               <select 
-                value={refreshInterval} 
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                className="refresh-interval-select"
+                id="team-select"
+                value={selectedTeam} 
+                onChange={(e) => setSelectedTeam(e.target.value)}
               >
-                <option value={10000}>10s</option>
-                <option value={30000}>30s</option>
-                <option value={60000}>1m</option>
-                <option value={300000}>5m</option>
+                <option value="all">All Teams</option>
+                {teams.map(team => (
+                  <option key={team} value={team}>{team}</option>
+                ))}
               </select>
-            )}
+            </div>
+            
+            <div className="filter-item">
+              <label htmlFor="env-select">Environment:</label>
+              <select 
+                id="env-select"
+                value={selectedEnvironment} 
+                onChange={(e) => setSelectedEnvironment(e.target.value)}
+              >
+                <option value="all">All Environments</option>
+                {environments.map(env => (
+                  <option key={env} value={env}>{env}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <button className="refresh-btn" onClick={loadMetrics} disabled={loading}>
-            <RefreshCw size={16} className={loading ? 'spinning' : ''} />
-          </button>
-
-          <button className="export-btn">
-            <Download size={16} />
-            Export
+          <button 
+            className={`refresh-button ${autoRefresh ? 'active' : ''}`}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
+            Auto Refresh
           </button>
         </div>
       </div>
 
-      {/* Key Metrics Summary */}
-      <div className="metrics-summary">
-        {summaryMetrics.slice(0, 6).map((metric, index) => (
-          <div key={index} className="summary-card">
-            <div className="summary-header">
-              <span className="summary-name">{metric.name}</span>
-              <span className={`summary-change ${metric.trend}`}>
-                {metric.trend === 'up' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                {Math.abs(metric.change)}%
-              </span>
-            </div>
-            <div className="summary-value">
-              {formatValue(metric.value, metric.unit)}
-            </div>
+      {loading ? (
+        <div className="loading-container">
+          <div className="loading-spinner">
+            <RefreshCw className="w-8 h-8 animate-spin" />
           </div>
-        ))}
-      </div>
-
-      {/* Category Tabs */}
-      <div className="category-tabs">
-        <button 
-          className={`category-tab ${selectedCategory === 'all' ? 'active' : ''}`}
-          onClick={() => setSelectedCategory('all')}
-        >
-          All Metrics ({metrics.length})
-        </button>
-        {Object.entries(categorizedMetrics).map(([key, category]) => (
-          <button 
-            key={key}
-            className={`category-tab ${selectedCategory === key ? 'active' : ''}`}
-            onClick={() => setSelectedCategory(key)}
-          >
-            {category.icon}
-            {category.title} ({category.metrics.length})
-          </button>
-        ))}
-      </div>
-
-      {/* Metrics Display */}
-      {selectedCategory === 'all' ? (
-        <div className="metrics-categories">
-          {Object.entries(categorizedMetrics).map(([key, category]) => (
-            <div key={key} className="metrics-category">
-              <div 
-                className="category-header"
-                onClick={() => toggleCategory(key)}
-              >
-                {category.icon}
-                <h2>{category.title}</h2>
-                <span className="metric-count">({category.metrics.length} metrics)</span>
-                <ChevronDown 
-                  size={20} 
-                  className={`chevron ${collapsedCategories.has(key) ? 'collapsed' : ''}`}
-                />
-              </div>
-              
-              {!collapsedCategories.has(key) && (
-                <div className="metrics-grid">
-                  {category.metrics.map((metric) => (
-                    <div key={metric.id} className="metric-card">
-                      <div className="metric-header">
-                        <h3>{metric.title}</h3>
-                      </div>
-                      <div className="metric-chart">
-                        {renderChart(metric)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       ) : (
-        <div className="metrics-grid">
-          {categorizedMetrics[selectedCategory as keyof typeof categorizedMetrics]?.metrics.map((metric) => (
-            <div key={metric.id} className="metric-card">
-              <div className="metric-header">
-                <h3>{metric.title}</h3>
+        <div className="metrics-content">
+          {/* Summary Cards */}
+          <div className="summary-grid">
+            <div className="summary-card">
+              <div className="card-icon">
+                <Server className="w-6 h-6 text-blue-500" />
               </div>
-              <div className="metric-chart">
-                {renderChart(metric)}
+              <div className="card-content">
+                <h3>Total Applications</h3>
+                <div className="card-value">{platformSummary?.summary.total || 0}</div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {metrics.length === 0 && !loading && (
-        <div className="no-metrics">
-          <div className="no-metrics-content">
-            <MemoryStick size={48} />
-            <h3>No Metrics Available</h3>
-            <p>No metrics data found for the selected filters. Try adjusting your time range or service selection.</p>
+            <div className="summary-card">
+              <div className="card-icon">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+              </div>
+              <div className="card-content">
+                <h3>Healthy Applications</h3>
+                <div className="card-value">{platformSummary?.summary.healthy || 0}</div>
+                <div className="card-subtitle">
+                  {getHealthPercentage(
+                    platformSummary?.summary.healthy || 0, 
+                    platformSummary?.summary.total || 0
+                  )}% health rate
+                </div>
+              </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="card-icon">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+              </div>
+              <div className="card-content">
+                <h3>Issues Detected</h3>
+                <div className="card-value">{platformSummary?.summary.unhealthy || 0}</div>
+                <div className="card-subtitle">Require attention</div>
+              </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="card-icon">
+                <Users className="w-6 h-6 text-purple-500" />
+              </div>
+              <div className="card-content">
+                <h3>Active Teams</h3>
+                <div className="card-value">{teams.length}</div>
+                <div className="card-subtitle">Managing applications</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="charts-grid">
+            {/* Application Health Distribution */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Application Health Distribution</h3>
+              </div>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={120}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Team Health Overview */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3>Team Health Overview</h3>
+              </div>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={teamHealthData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="healthy" fill="#10b981" name="Healthy" />
+                    <Bar dataKey="total" fill="#e5e7eb" name="Total" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Applications List */}
+          <div className="applications-section">
+            <div className="section-header">
+              <h3>Application Status ({filteredApplications.length})</h3>
+            </div>
+            
+            <div className="applications-grid">
+              {filteredApplications.map(app => (
+                <div key={app.id} className="application-card">
+                  <div className="app-header">
+                    <div className="app-status">
+                      {renderStatusIcon(app.status)}
+                    </div>
+                    <div className="app-info">
+                      <h4 className="app-name">{app.name}</h4>
+                      <div className="app-details">
+                        <span className="app-team">{app.team}</span>
+                        <span className="app-env">{app.environment}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="app-meta">
+                    <div className="meta-item">
+                      <span className="meta-label">Namespace:</span>
+                      <span className="meta-value">{app.namespace}</span>
+                    </div>
+                    <div className="meta-item">
+                      <span className="meta-label">Last Check:</span>
+                      <span className="meta-value">
+                        {app.last_check_time ? 
+                          new Date(app.last_check_time).toLocaleString() : 
+                          'Never'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {filteredApplications.length === 0 && (
+              <div className="empty-state">
+                <Activity className="w-12 h-12 text-gray-400" />
+                <p>No applications found matching the current filters.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

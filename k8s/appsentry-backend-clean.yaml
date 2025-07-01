@@ -57,7 +57,7 @@ spec:
       serviceAccountName: appsentry-backend
       containers:
       - name: backend
-        image: docker.io/lijomadassery/appsentry-backend:v2.2
+        image: docker.io/lijomadassery/appsentry-backend:v2.1
         ports:
         - containerPort: 3001
           name: http
@@ -98,10 +98,6 @@ spec:
         - name: DATABASE_URL
           value: "mysql://appsentry:appsentry456@mysql:3306/appsentry"
         
-        # Redis Configuration (disabled)
-        - name: REDIS_ENABLED
-          value: "false"
-        
         # JWT Authentication Configuration
         - name: JWT_SECRET
           value: "appsentry-jwt-secret-2025-dev-cluster"
@@ -112,10 +108,10 @@ spec:
         
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "200m"
+            memory: "256Mi"
+            cpu: "100m"
           limits:
-            memory: "1Gi"
+            memory: "512Mi"
             cpu: "500m"
         
         livenessProbe:

@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
-import { clickHouseService } from './clickhouseService';
+import { prisma } from '../database/prisma';
 import axios from 'axios';
+import { Prisma } from '@prisma/client';
 
 export interface HealthCheckResult {
   applicationId: string;
@@ -47,7 +48,7 @@ class HealthCheckService {
             name: app.name,
             url: app.health_check_url,
             method: 'GET',
-            timeout: app.health_check_timeout || 5000,
+            timeout: (app.health_check_timeout || 30) * 1000,
             interval: app.health_check_interval || 60, // Default 60 seconds
             retryCount: 3,
             expectedStatusCodes: [200, 201, 204],
@@ -174,7 +175,7 @@ class HealthCheckService {
         result.errorMessage = `Unexpected status code: ${response.status}`;
       }
 
-      // Store result in ClickHouse
+      // Store result in MySQL
       await this.storeHealthCheckResult(result);
 
       // Update application status
@@ -197,7 +198,7 @@ class HealthCheckService {
         }
       };
 
-      // Store result in ClickHouse
+      // Store result in MySQL
       await this.storeHealthCheckResult(result);
 
       // Update application status
@@ -212,23 +213,21 @@ class HealthCheckService {
   }
 
   /**
-   * Store health check result in ClickHouse
+   * Store health check result in MySQL
    */
   private async storeHealthCheckResult(result: HealthCheckResult): Promise<void> {
     try {
-      const query = `
-        INSERT INTO appsentry.health_checks (
-          application_id, status, response_time_ms, check_time, 
-          status_code, error_message, details
-        ) VALUES (
-          '${result.applicationId}', '${result.status}', ${result.responseTime}, 
-          '${result.timestamp.toISOString()}', ${result.statusCode || 0}, 
-          '${this.escapeString(result.errorMessage || '')}', 
-          '${this.escapeString(JSON.stringify(result.details || {}))}'
-        )
-      `;
-
-      await clickHouseService.query(query);
+      await prisma.healthCheck.create({
+        data: {
+          application_id: result.applicationId,
+          status: result.status,
+          response_time_ms: result.responseTime,
+          check_time: result.timestamp,
+          status_code: result.statusCode || null,
+          error_message: result.errorMessage || null,
+          details: result.details ? JSON.stringify(result.details) : null
+        }
+      });
     } catch (error) {
       logger.error('Failed to store health check result:', error);
     }
@@ -243,35 +242,50 @@ class HealthCheckService {
     errorMessage?: string
   ): Promise<void> {
     try {
-      const lastHealthCheck = new Date().toISOString();
-      const query = `
-        ALTER TABLE appsentry.applications 
-        UPDATE 
-          last_check_time = '${lastHealthCheck}',
-          status = '${status}'
-        WHERE id = '${applicationId}'
-      `;
-
-      await clickHouseService.query(query);
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: status as 'healthy' | 'unhealthy' | 'unknown',
+          last_check_time: new Date(),
+          updated_at: new Date()
+        }
+      });
     } catch (error) {
       logger.error('Failed to update application status:', error);
     }
   }
 
   /**
-   * Get registered applications from ClickHouse
+   * Get registered applications from MySQL
    */
   private async getRegisteredApplications(): Promise<any[]> {
     try {
-      const query = `
-        SELECT id, name, health_check_url, health_check_interval, 
-               30 as health_check_timeout, active as enabled
-        FROM appsentry.applications 
-        WHERE active = true AND health_check_url != ''
-      `;
+      const applications = await prisma.application.findMany({
+        where: {
+          active: true,
+          health_check_url: {
+            not: null,
+            not: ''
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          health_check_url: true,
+          health_check_interval: true,
+          health_check_timeout: true,
+          active: true
+        }
+      });
 
-      const result = await clickHouseService.query(query);
-      return result || [];
+      return applications.map(app => ({
+        id: app.id,
+        name: app.name,
+        health_check_url: app.health_check_url!,
+        health_check_interval: app.health_check_interval || 60,
+        health_check_timeout: app.health_check_timeout || 30,
+        enabled: app.active
+      }));
     } catch (error) {
       logger.error('Failed to get registered applications:', error);
       return [];
@@ -286,24 +300,20 @@ class HealthCheckService {
     limit: number = 100
   ): Promise<HealthCheckResult[]> {
     try {
-      const query = `
-        SELECT application_id, status, response_time_ms, check_time, 
-               status_code, error_message, details
-        FROM appsentry.health_checks 
-        WHERE application_id = '${applicationId}'
-        ORDER BY check_time DESC 
-        LIMIT ${limit}
-      `;
+      const healthChecks = await prisma.healthCheck.findMany({
+        where: { application_id: applicationId },
+        orderBy: { check_time: 'desc' },
+        take: limit
+      });
 
-      const result = await clickHouseService.query(query);
-      return (result || []).map((row: any) => ({
-        applicationId: row.application_id,
-        status: row.status,
-        responseTime: row.response_time_ms,
-        timestamp: new Date(row.check_time),
-        statusCode: row.status_code || undefined,
-        errorMessage: row.error_message || undefined,
-        details: row.details ? JSON.parse(row.details) : undefined
+      return healthChecks.map(check => ({
+        applicationId: check.application_id,
+        status: check.status as 'healthy' | 'unhealthy' | 'unknown',
+        responseTime: check.response_time_ms,
+        timestamp: check.check_time,
+        statusCode: check.status_code || undefined,
+        errorMessage: check.error_message || undefined,
+        details: check.details ? JSON.parse(check.details) : undefined
       }));
     } catch (error) {
       logger.error('Failed to get health check history:', error);
@@ -321,24 +331,29 @@ class HealthCheckService {
     unknown: number;
   }> {
     try {
-      const query = `
-        SELECT status, COUNT(*) as count
-        FROM appsentry.applications 
-        WHERE active = true
-        GROUP BY status
-      `;
+      const statusCounts = await prisma.application.groupBy({
+        by: ['status'],
+        where: { active: true },
+        _count: true
+      });
 
-      const result = await clickHouseService.query(query);
       const summary = { total: 0, healthy: 0, unhealthy: 0, unknown: 0 };
 
-      (result || []).forEach((row: any) => {
-        const status = row.status || 'unknown';
-        const count = parseInt(row.count, 10);
-        
+      statusCounts.forEach(row => {
+        const count = row._count;
         summary.total += count;
-        if (status === 'healthy') summary.healthy += count;
-        else if (status === 'unhealthy') summary.unhealthy += count;
-        else summary.unknown += count;
+        
+        switch (row.status) {
+          case 'healthy':
+            summary.healthy += count;
+            break;
+          case 'unhealthy':
+            summary.unhealthy += count;
+            break;
+          default:
+            summary.unknown += count;
+            break;
+        }
       });
 
       return summary;
@@ -353,15 +368,18 @@ class HealthCheckService {
    */
   public async triggerHealthCheck(applicationId: string): Promise<HealthCheckResult | null> {
     try {
-      // Get application details
-      const query = `
-        SELECT id, name, health_check_url, 30 as health_check_timeout
-        FROM appsentry.applications 
-        WHERE id = '${applicationId}' AND active = true
-      `;
-
-      const result = await clickHouseService.query(query);
-      const app = result?.[0];
+      const app = await prisma.application.findFirst({
+        where: {
+          id: applicationId,
+          active: true
+        },
+        select: {
+          id: true,
+          name: true,
+          health_check_url: true,
+          health_check_timeout: true
+        }
+      });
 
       if (!app || !app.health_check_url) {
         throw new Error('Application not found or health check URL not configured');
@@ -372,7 +390,7 @@ class HealthCheckService {
         name: app.name,
         url: app.health_check_url,
         method: 'GET',
-        timeout: app.health_check_timeout || 5000,
+        timeout: (app.health_check_timeout || 30) * 1000,
         interval: 60,
         retryCount: 1,
         expectedStatusCodes: [200, 201, 204],
@@ -384,13 +402,6 @@ class HealthCheckService {
       logger.error(`Failed to trigger health check for ${applicationId}:`, error);
       return null;
     }
-  }
-
-  /**
-   * Escape string for ClickHouse queries
-   */
-  private escapeString(str: string): string {
-    return str.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
   }
 
   /**
