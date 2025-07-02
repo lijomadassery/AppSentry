@@ -23,15 +23,14 @@ router.get('/overview', async (req, res) => {
     const totalApps = applications.length;
     const healthyApps = applications.filter(app => app.status === 'healthy').length;
     const degradedApps = applications.filter(app => app.status === 'degraded').length;
-    const downApps = applications.filter(app => app.status === 'down').length;
-    const unknownApps = applications.filter(app => app.status === 'unknown').length;
+    const unhealthyApps = applications.filter(app => app.status === 'unhealthy').length;
 
     logger.info('Platform overview calculated', {
       operation: 'platform_metrics',
       total_apps: totalApps,
       healthy_apps: healthyApps,
       degraded_apps: degradedApps,
-      down_apps: downApps,
+      unhealthy_apps: unhealthyApps,
       overall_health_percent: totalApps > 0 ? (healthyApps / totalApps * 100).toFixed(1) : 0
     });
 
@@ -40,8 +39,7 @@ router.get('/overview', async (req, res) => {
         totalApplications: totalApps,
         healthyApplications: healthyApps,
         degradedApplications: degradedApps,
-        downApplications: downApps,
-        unknownApplications: unknownApps,
+        unhealthyApplications: unhealthyApps,
         overallHealth: totalApps > 0 ? (healthyApps / totalApps * 100).toFixed(1) : 0
       },
       timestamp: new Date().toISOString()

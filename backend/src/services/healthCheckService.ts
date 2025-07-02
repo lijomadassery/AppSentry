@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 
 export interface HealthCheckResult {
   applicationId: string;
-  status: 'healthy' | 'unhealthy' | 'unknown';
+  status: 'healthy' | 'unhealthy' | 'degraded';
   responseTime: number;
   timestamp: Date;
   statusCode?: number;
@@ -131,7 +131,7 @@ class HealthCheckService {
       logger.debug(`Health check already running for ${config.name}, skipping...`);
       return {
         applicationId: config.id,
-        status: 'unknown',
+        status: 'unhealthy',
         responseTime: 0,
         timestamp: new Date(),
         errorMessage: 'Check already in progress'
@@ -245,7 +245,7 @@ class HealthCheckService {
       await prisma.application.update({
         where: { id: applicationId },
         data: {
-          status: status as 'healthy' | 'unhealthy' | 'unknown',
+          status: status as 'healthy' | 'unhealthy' | 'degraded',
           last_check_time: new Date(),
           updated_at: new Date()
         }
@@ -308,7 +308,7 @@ class HealthCheckService {
 
       return healthChecks.map(check => ({
         applicationId: check.application_id,
-        status: check.status as 'healthy' | 'unhealthy' | 'unknown',
+        status: check.status as 'healthy' | 'unhealthy' | 'degraded',
         responseTime: check.response_time_ms,
         timestamp: check.check_time,
         statusCode: check.status_code || undefined,
@@ -328,16 +328,16 @@ class HealthCheckService {
     total: number;
     healthy: number;
     unhealthy: number;
-    unknown: number;
+    degraded: number;
   }> {
     try {
       const statusCounts = await prisma.application.groupBy({
         by: ['status'],
-        where: { active: true },
+        where: { isActive: true },
         _count: true
       });
 
-      const summary = { total: 0, healthy: 0, unhealthy: 0, unknown: 0 };
+      const summary = { total: 0, healthy: 0, unhealthy: 0, degraded: 0 };
 
       statusCounts.forEach(row => {
         const count = row._count;
@@ -350,8 +350,12 @@ class HealthCheckService {
           case 'unhealthy':
             summary.unhealthy += count;
             break;
+          case 'degraded':
+            summary.degraded += count;
+            break;
           default:
-            summary.unknown += count;
+            // Should not happen with proper enum validation
+            summary.unhealthy += count;
             break;
         }
       });
@@ -359,7 +363,7 @@ class HealthCheckService {
       return summary;
     } catch (error) {
       logger.error('Failed to get health status summary:', error);
-      return { total: 0, healthy: 0, unhealthy: 0, unknown: 0 };
+      return { total: 0, healthy: 0, unhealthy: 0, degraded: 0 };
     }
   }
 
