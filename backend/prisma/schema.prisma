@@ -84,6 +84,11 @@ model Application {
   environment     Environment
   healthUrl       String      @map("health_url") @db.VarChar(500)
   teamId          String?     @map("team_id") @db.VarChar(36)
+  status          HealthStatus @default(unhealthy)
+  lastCheckTime   DateTime?   @map("last_check_time")
+  healthCheckUrl      String?     @map("health_check_url") @db.VarChar(500)
+  healthCheckInterval Int?        @map("health_check_interval") @default(60)
+  healthCheckTimeout  Int?        @map("health_check_timeout") @default(30)
   isActive        Boolean     @default(true) @map("is_active")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")

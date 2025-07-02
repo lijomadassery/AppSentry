@@ -1,17 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { healthCheckService } from '../services/healthCheckService';
 import { logger } from '../utils/logger';
-import { trace } from '@opentelemetry/api';
 
 const router = Router();
-const tracer = trace.getTracer('appsentry-health-checks', '1.0.0');
 
 /**
  * Get health check status summary
  */
 router.get('/summary', async (req: Request, res: Response) => {
-  const span = tracer.startSpan('get_health_summary');
-  
   try {
     logger.info('Retrieving health check summary', {
       endpoint: '/api/health-checks/summary',
@@ -19,35 +15,20 @@ router.get('/summary', async (req: Request, res: Response) => {
       clientIP: req.ip
     });
 
-    span.setAttributes({
-      'http.method': 'GET',
-      'http.route': '/api/health-checks/summary',
-      'operation.name': 'get_health_summary'
-    });
-
     logger.debug('Calling health check service for summary data');
     const summary = await healthCheckService.getHealthStatusSummary();
     
-    span.setAttributes({
-      'health.total_apps': summary.total,
-      'health.healthy_apps': summary.healthy,
-      'health.unhealthy_apps': summary.unhealthy
-    });
-
     logger.info('Health summary retrieved successfully', {
       total: summary.total,
       healthy: summary.healthy,
       unhealthy: summary.unhealthy,
-      unknown: summary.unknown,
-      traceId: span.spanContext().traceId
+      unknown: summary.unknown
     });
 
     res.json({
       success: true,
       data: summary
     });
-
-    span.setStatus({ code: 1 }); // OK
 
   } catch (error) {
     logger.error('Failed to get health check summary', {
@@ -56,15 +37,10 @@ router.get('/summary', async (req: Request, res: Response) => {
       endpoint: '/api/health-checks/summary'
     });
     
-    span.recordException(error as Error);
-    span.setStatus({ code: 2, message: (error as Error).message });
-    
     res.status(500).json({
       success: false,
       error: 'Failed to get health check summary'
     });
-  } finally {
-    span.end();
   }
 });
 

@@ -15,7 +15,8 @@ router.get('/overview', async (req, res) => {
     });
     
     const applications = await prisma.application.findMany({ 
-      where: { active: true } 
+      where: { isActive: true },
+      include: { team: true }
     });
     
     // Calculate overall platform health
@@ -55,15 +56,17 @@ router.get('/overview', async (req, res) => {
 router.get('/teams', async (req, res) => {
   try {
     const applications = await prisma.application.findMany({ 
-      where: { active: true } 
+      where: { isActive: true },
+      include: { team: true }
     });
     
     // Group applications by team
     const teamGroups = applications.reduce((acc, app) => {
-      if (!acc[app.team]) {
-        acc[app.team] = [];
+      const teamName = app.team?.name || 'Unassigned';
+      if (!acc[teamName]) {
+        acc[teamName] = [];
       }
-      acc[app.team].push(app);
+      acc[teamName].push(app);
       return acc;
     }, {} as Record<string, any[]>);
 
@@ -80,7 +83,6 @@ router.get('/teams', async (req, res) => {
           id: app.id,
           name: app.name,
           status: app.status,
-          namespace: app.namespace,
           environment: app.environment
         }))
       };

@@ -2,27 +2,16 @@
 export type {
   User,
   Application,
-  TestRun,
-  TestResult,
-  HealthMetric,
-  ScheduledReport,
-  AuditLog,
-  NotificationPreference,
-  ConfigHistory,
+  Team,
+  TeamMembership,
+  HealthCheck,
 } from '@prisma/client';
 
 // Export enums from Prisma
 export {
   UserRole,
   Environment,
-  TriggerType,
-  TestRunStatus,
-  TestType,
-  TestStatus,
-  ReportType,
-  NotificationType,
-  NotificationThreshold,
-  ConfigType,
+  HealthStatus,
 } from '@prisma/client';
 
 // Custom types for API responses
@@ -48,33 +37,17 @@ export interface ApiResponse<T = any> {
 
 // User with relations
 export interface UserWithRelations extends User {
-  testRuns?: TestRun[];
-  auditLogs?: AuditLog[];
+  teams?: TeamMembership[];
   createdApplications?: Application[];
   modifiedApplications?: Application[];
-  scheduledReports?: ScheduledReport[];
-  notificationPreferences?: NotificationPreference[];
 }
 
 // Application with relations
 export interface ApplicationWithRelations extends Application {
   creator?: User;
   lastModifier?: User;
-  testResults?: TestResult[];
-  healthMetrics?: HealthMetric[];
-  notificationPreferences?: NotificationPreference[];
-}
-
-// Test run with relations
-export interface TestRunWithRelations extends TestRun {
-  user?: User;
-  testResults?: TestResult[];
-}
-
-// Test result with relations
-export interface TestResultWithRelations extends TestResult {
-  testRun?: TestRun;
-  application?: Application;
+  team?: Team;
+  healthChecks?: HealthCheck[];
 }
 
 // Application creation input

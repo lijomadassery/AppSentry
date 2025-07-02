@@ -1,4 +1,18 @@
-import { TestType, TestStatus } from '@prisma/client';
+// Test types and statuses
+export enum TestType {
+  HEALTH_CHECK = 'HEALTH_CHECK',
+  LOGIN_TEST = 'LOGIN_TEST',
+  API_TEST = 'API_TEST'
+}
+
+export enum TestStatus {
+  PENDING = 'PENDING',
+  RUNNING = 'RUNNING',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  SKIPPED = 'SKIPPED',
+  CANCELLED = 'CANCELLED'
+}
 
 // Test execution configuration
 export interface TestConfig {

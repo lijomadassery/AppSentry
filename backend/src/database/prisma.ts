@@ -9,37 +9,10 @@ export class Database {
   private constructor() {
     this.prisma = new PrismaClient({
       log: config.env === 'development' 
-        ? [
-            { emit: 'event', level: 'query' },
-            { emit: 'event', level: 'error' },
-            { emit: 'event', level: 'info' },
-            { emit: 'event', level: 'warn' },
-          ]
-        : [
-            { emit: 'event', level: 'error' },
-          ],
+        ? ['query', 'info', 'warn', 'error']
+        : ['error'],
     });
 
-    // Log queries in development
-    if (config.env === 'development') {
-      this.prisma.$on('query', (e) => {
-        logger.debug(`Query: ${e.query}`);
-        logger.debug(`Params: ${e.params}`);
-        logger.debug(`Duration: ${e.duration}ms`);
-      });
-    }
-
-    this.prisma.$on('error', (e) => {
-      logger.error('Prisma error:', e);
-    });
-
-    this.prisma.$on('warn', (e) => {
-      logger.warn('Prisma warning:', e);
-    });
-
-    this.prisma.$on('info', (e) => {
-      logger.info('Prisma info:', e);
-    });
   }
 
   public static getInstance(): Database {
