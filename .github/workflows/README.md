@@ -11,8 +11,8 @@ The `docker-build-push.yml` workflow automatically builds and pushes Docker imag
 
 ### Required Secrets
 Set these in your GitHub repository settings (Settings → Secrets and variables → Actions):
-- `DOCKER_HUB_USERNAME`: Your Docker Hub username (e.g., lijomadassery)
-- `DOCKER_HUB_TOKEN`: Docker Hub access token (not your password)
+- `DOCKERHUB_USERNAME`: Your Docker Hub username (e.g., lijomadassery)
+- `DOCKERHUB_TOKEN`: Docker Hub access token (not your password)
 
 ### Image Tags
 - `latest`: Always points to the latest master/main build
