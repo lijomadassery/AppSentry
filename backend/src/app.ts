@@ -120,7 +120,7 @@ export class App {
     // Import routes
     const authRoutes = require('./routes/auth.routes').default;
     const applicationRoutes = require('./routes/applications.routes').default;
-    const testRoutes = require('./routes/tests.routes').default;
+    // const testRoutes = require('./routes/tests.routes').default; // Temporarily disabled - TestOrchestrator removed
     // Removed OTEL and telemetry routes
     const platformMetricsRoutes = require('./routes/platformMetrics.routes').default;
     const healthCheckRoutes = require('./routes/healthCheck.routes').default;
@@ -128,7 +128,7 @@ export class App {
     // API routes
     this.app.use('/api/auth', authRoutes);
     this.app.use('/api/applications', applicationRoutes);
-    this.app.use('/api/tests', testRoutes);
+    // this.app.use('/api/tests', testRoutes); // Temporarily disabled - TestOrchestrator removed
     
     // Platform routes
     this.app.use('/api/platform', platformMetricsRoutes);
@@ -143,7 +143,7 @@ export class App {
         endpoints: {
           auth: '/api/auth',
           applications: '/api/applications',
-          tests: '/api/tests',
+          // tests: '/api/tests', // Temporarily disabled - TestOrchestrator removed
           platform: '/api/platform',
           healthChecks: '/api/health-checks',
           health: '/health',
