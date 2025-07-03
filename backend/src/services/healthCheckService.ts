@@ -262,7 +262,7 @@ class HealthCheckService {
     try {
       const applications = await prisma.application.findMany({
         where: {
-          active: true,
+          isActive: true,
           health_check_url: {
             not: null,
             not: ''
@@ -274,7 +274,7 @@ class HealthCheckService {
           health_check_url: true,
           health_check_interval: true,
           health_check_timeout: true,
-          active: true
+          isActive: true
         }
       });
 
@@ -284,7 +284,7 @@ class HealthCheckService {
         health_check_url: app.health_check_url!,
         health_check_interval: app.health_check_interval || 60,
         health_check_timeout: app.health_check_timeout || 30,
-        enabled: app.active
+        enabled: app.isActive
       }));
     } catch (error) {
       logger.error('Failed to get registered applications:', error);
@@ -375,7 +375,7 @@ class HealthCheckService {
       const app = await prisma.application.findFirst({
         where: {
           id: applicationId,
-          active: true
+          isActive: true
         },
         select: {
           id: true,
