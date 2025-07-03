@@ -263,7 +263,7 @@ class HealthCheckService {
       const applications = await prisma.application.findMany({
         where: {
           isActive: true,
-          health_check_url: {
+          healthCheckUrl: {
             not: null,
             not: ''
           }
@@ -271,9 +271,9 @@ class HealthCheckService {
         select: {
           id: true,
           name: true,
-          health_check_url: true,
-          health_check_interval: true,
-          health_check_timeout: true,
+          healthCheckUrl: true,
+          healthCheckInterval: true,
+          healthCheckTimeout: true,
           isActive: true
         }
       });
@@ -281,9 +281,9 @@ class HealthCheckService {
       return applications.map(app => ({
         id: app.id,
         name: app.name,
-        health_check_url: app.health_check_url!,
-        health_check_interval: app.health_check_interval || 60,
-        health_check_timeout: app.health_check_timeout || 30,
+        health_check_url: app.healthCheckUrl!,
+        health_check_interval: app.healthCheckInterval || 60,
+        health_check_timeout: app.healthCheckTimeout || 30,
         enabled: app.isActive
       }));
     } catch (error) {
@@ -380,21 +380,21 @@ class HealthCheckService {
         select: {
           id: true,
           name: true,
-          health_check_url: true,
-          health_check_timeout: true
+          healthCheckUrl: true,
+          healthCheckTimeout: true
         }
       });
 
-      if (!app || !app.health_check_url) {
+      if (!app || !app.healthCheckUrl) {
         throw new Error('Application not found or health check URL not configured');
       }
 
       const config: HealthCheckConfig = {
         id: app.id,
         name: app.name,
-        url: app.health_check_url,
+        url: app.healthCheckUrl,
         method: 'GET',
-        timeout: (app.health_check_timeout || 30) * 1000,
+        timeout: (app.healthCheckTimeout || 30) * 1000,
         interval: 60,
         retryCount: 1,
         expectedStatusCodes: [200, 201, 204],
